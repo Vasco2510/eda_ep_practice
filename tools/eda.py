@@ -16,6 +16,7 @@ Comandos (desde la raíz del proyecto:  .\eda <comando>   o   python tools/eda.p
   eda list                lista los problemas
   eda selftest            verifica las plantillas contra fuerza bruta
   eda demo                (re)crea el problema de práctica demo_pila (ver TUTORIAL.md)
+  eda ia     [slug]       la IA resuelve el problema → entrega/<slug>/Main_ia.java (ver TUTORIAL_IA.md)
 Sin [slug] se usa el problema actual (el último recibido o el elegido con `eda use`).
 """
 import json
@@ -342,9 +343,14 @@ def run_limited(cmd, inp, timeout):
 def compile_java(src: Path, out_dir: Path) -> tuple[bool, str]:
     shutil.rmtree(out_dir, ignore_errors=True)
     out_dir.mkdir(parents=True)
-    r = subprocess.run([jdk("javac"), "-encoding", "UTF-8", "-d", str(out_dir), str(src)],
+    target = src
+    if src.name != F_CLASS + ".java":  # p. ej. Main_ia.java: `public class Main` exige llamarse Main.java
+        target = out_dir / "_src" / (F_CLASS + ".java")
+        target.parent.mkdir()
+        shutil.copy(src, target)
+    r = subprocess.run([jdk("javac"), "-encoding", "UTF-8", "-d", str(out_dir), str(target)],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
-    return r.returncode == 0, r.stderr
+    return r.returncode == 0, r.stderr.replace(str(target), str(src))
 
 
 def problem_meta(slug):
@@ -372,7 +378,8 @@ def run_tests(slug, ia=False, verbose=True) -> tuple[bool, str]:
         return False, "\n".join(report)
 
     tests = sorted((PROBLEMAS / slug / "tests").glob("*.in"),
-                   key=lambda p: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", p.stem)])
+                   key=lambda p: (not p.stem.startswith("sample"),
+                                  [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", p.stem)]))
     if not tests:
         say(c("⚠ no hay tests en " + str((PROBLEMAS / slug / "tests").relative_to(ROOT)), "yellow"))
         return False, "\n".join(report)
@@ -598,6 +605,10 @@ def main(argv):
         cmd_selftest()
     elif cmd == "demo":
         cmd_demo()
+    elif cmd == "ia":
+        sys.path.insert(0, str(ROOT / "tools"))
+        import ia
+        sys.exit(ia.solve(argv[1:]))
     elif cmd in ("-h", "--help", "help"):
         print(__doc__)
     else:

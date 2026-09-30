@@ -1,0 +1,13 @@
+{
+  "name": "D. Ejercito supremo",
+  "group": "Codeforces - EDA",
+  "url": "https://codeforces.com/group/apQ6meuqNq/contest/710567/problem/D",
+  "timeLimit": 2000,
+  "memoryLimit": 256,
+  "tests": [
+    {
+      "input": "5\n5\n3 3 3 0 0\n6\n0 3 3 0 0 3\n7\n1 2 3 0 4 5 0\n7\n1 2 5 0 4 3 0\n5\n3 1 0 0 4\n",
+      "output": "6\n6\n8\n9\n4\n"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+// D. Ejercito supremo — solución de referencia (pégala en src/problemas/cf710567D/JSolution.java)
+//
+// Idea: cuando llega un héroe, entre todas las bonificaciones vistas y NO usadas le conviene
+// la mayor (poner una bonificación "encima" solo depende de haberla guardado y de no haber puesto
+// otra encima después; como podemos descartar libremente, podemos arreglar que la mayor quede arriba).
+// Es un intercambio: si un héroe usara una más chica que la mayor disponible, cambiarlas no empeora.
+// => max-heap: bonificación → push; héroe → si hay algo, suma el máximo y sácalo.  O(n log n).
+//
+// Plantilla usada: PersistentLeftistHeap (es min-heap: guardamos -s para que funcione como max-heap).
+// (Con java.util.PriorityQueue también sale; aquí usamos la plantilla persistente del curso.)
+//
+// 1) Agrega este import arriba, junto al de FastScanner:
+import plantillas.PersistentLeftistHeap;
+
+// 2) En main() descomenta:   t = in.nextInt();
+// 3) Reemplaza solve() por:
+    static void solve() {
+        int n = in.nextInt();
+        PersistentLeftistHeap heap = new PersistentLeftistHeap();
+        int v = 0;          // versión actual del heap (0 = vacío)
+        long ans = 0;       // hasta 2e5 * 1e9 = 2e14 → long
+        for (int i = 0; i < n; i++) {
+            long s = in.nextLong();
+            if (s > 0) {
+                v = heap.insert(v, -s);            // bonificación
+            } else if (!heap.isEmpty(v)) {
+                ans += -heap.minKey(v);            // héroe: usa la mayor bonificación disponible
+                v = heap.extractMin(v);
+            }
+        }
+        out.println(ans);
+    }
