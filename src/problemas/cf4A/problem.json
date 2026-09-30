@@ -1,0 +1,31 @@
+{
+  "name": "A. Watermelon",
+  "group": "Codeforces - Codeforces Beta Round 4 (Div. 2 Only)",
+  "url": "https://codeforces.com/problemset/problem/4/A",
+  "interactive": false,
+  "memoryLimit": 64,
+  "timeLimit": 1000,
+  "tests": [
+    {
+      "input": "8\n",
+      "output": "YES\n"
+    }
+  ],
+  "testType": "single",
+  "input": {
+    "type": "stdin"
+  },
+  "output": {
+    "type": "stdout"
+  },
+  "languages": {
+    "java": {
+      "mainClass": "Main",
+      "taskClass": "AWatermelon"
+    }
+  },
+  "batch": {
+    "id": "829a026f-0849-43e9-84a7-512e63f67d53",
+    "size": 1
+  }
+}

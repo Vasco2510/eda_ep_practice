@@ -1,0 +1,19 @@
+    // Solución de referencia para la demo (pégala dentro de solve() si quieres comparar):
+    static void solve() {
+        int q = in.nextInt();
+        PersistentStack<Long> st = new PersistentStack<>();   // requiere: import plantillas.PersistentStack;
+        int[] ver = new int[q + 1];
+        for (int i = 1; i <= q; i++) {
+            int type = in.nextInt(), t = in.nextInt();
+            if (type == 1) ver[i] = st.push(ver[t], in.nextLong());
+            else if (type == 2) {
+                Long top = st.peek(ver[t]);
+                out.println(top == null ? -1 : top);
+                ver[i] = st.pop(ver[t]);
+            } else {
+                Long top = st.peek(ver[t]);
+                out.println((top == null ? -1 : top) + " " + st.size(ver[t]));
+                ver[i] = st.copy(ver[t]);
+            }
+        }
+    }

@@ -1,0 +1,7 @@
+{
+  "name": "Demo — Pila con historia",
+  "url": "(local) tools/demo/enunciado.md",
+  "timeLimit": 2000,
+  "memoryLimit": 256,
+  "tests": []
+}

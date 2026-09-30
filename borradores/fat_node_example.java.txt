@@ -1,0 +1,30 @@
+package com.example.demo;
+
+int p = 10;
+
+public class fat_node_example<T> {
+    T value;
+    fat_node_example<T> left;
+    fat_node_example<T> right;
+    array<T> history(2*p);
+    int uso;
+
+    /*Por default el conteinid dentro de la clase es private*/
+/*Creare una secicon public para los metodod*/
+    public fat_node_example(T value) {
+        this.value = value;
+        this.left = null;
+        this.right = null;
+        this.history = new array<T>();
+        this.uso = 0;
+    }
+
+    public insert_node(T value){
+        this.value = value;
+        this.left = null;
+        this.right = null;
+        this.history[uso] = {LeftNode, X , t_current}
+    }
+}
+
+

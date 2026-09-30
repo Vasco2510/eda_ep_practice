@@ -1,0 +1,89 @@
+package plantillas;
+import java.io.*;
+        import java.util.*;
+
+public class Main {
+
+    // --- PLANTILLA: SEGMENT TREE PERSISTENT (BASAT EN ARRAYS) ---
+    static class PersistentSegmentTree {
+        int MAX_NODES; // Capacitat màxima de nodes
+        int nodeCount; // Comptador global de nodes creats
+
+        // Representació del Segment Tree
+        long[] tree;
+        int[] leftChild;
+        int[] rightChild;
+
+        // Historial d'arrels (roots[v] guarda l'índex de l'arrel de la versió 'v')
+        int[] roots;
+        int maxVersions;
+
+        // Constructor
+        public PersistentSegmentTree(int maxElements, int expectedVersions) {
+            this.maxVersions = expectedVersions + 5;
+            // Un Segment Tree persistent sol requerir O(N + Q log N) nodes
+            this.MAX_NODES = (maxElements * 4) + (expectedVersions * 40);
+
+            tree = new long[MAX_NODES];
+            leftChild = new int[MAX_NODES];
+            rightChild = new int[MAX_NODES];
+            roots = new int[this.maxVersions];
+
+            nodeCount = 0;
+        }
+
+        // Crea un nou node (copiant l'estat anterior si existeix)
+        private int createNode(int copyFrom) {
+            int id = ++nodeCount;
+            if (copyFrom != 0) {
+                tree[id] = tree[copyFrom];
+                leftChild[id] = leftChild[copyFrom];
+                rightChild[id] = rightChild[copyFrom];
+            }
+            return id;
+        }
+
+        // Construcció inicial (Versió 0) a partir d'un array base
+        public int build(long[] arr, int l, int r) {
+            int id = createNode(0);
+            if (l == r) {
+                tree[id] = arr[l];
+                return id;
+            }
+            int mid = (l + r) / 2;
+            leftChild[id] = build(arr, l, mid);
+            rightChild[id] = build(arr, mid + 1, r);
+            tree[id] = tree[leftChild[id]] + tree[rightChild[id]];
+            return id;
+        }
+
+        // Actualització puntual: Retorna el nou ID d'arrel
+        // prevRoot: ID de l'arrel de la versió base
+        // pos: posició a modificar, val: nou valor o increment
+        public int update(int prevRoot, int l, int r, int pos, long val) {
+            int id = createNode(prevRoot); // Clonem el node actual
+            if (l == r) {
+                tree[id] = val; // Assignació (canviar a += val si és un increment)
+                return id;
+            }
+            int mid = (l + r) / 2;
+            if (pos <= mid) {
+                leftChild[id] = update(leftChild[prevRoot], l, mid, pos, val);
+            } else {
+                rightChild[id] = update(rightChild[prevRoot], mid + 1, r, pos, val);
+            }
+            tree[id] = tree[leftChild[id]] + tree[rightChild[id]];
+            return id;
+        }
+
+        // Consulta en rang [ql, qr] sobre una versió específica (root)
+        public long query(int root, int l, int r, int ql, int qr) {
+            if (root == 0 || ql > r || qr < l) return 0; // Rango fora de límits
+            if (ql <= l && r <= qr) return tree[root];  // Rang totalment convingut
+
+            int mid = (l + r) / 2;
+            long leftSum = query(leftChild[root], l, mid, ql, qr);
+            long rightSum = query(rightChild[root], mid + 1, r, ql, qr);
+            return leftSum + rightSum;
+        }
+    }

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="KHelperProblems">
+    <option name="problemsMap">
+      <map>
+        <entry key="JAVA:a_watermelon">
+          <value>
+            <ProblemData>
+              <option name="filePath" value="Z:\C26-2\EDA\ExamenEDA\Competitiva\src\main\java\problems\a_watermelon\JSolution.java" />
+              <option name="language" value="JAVA" />
+              <option name="problem">
+                <Problem>
+                  <option name="batch">
+                    <Batch>
+                      <option name="id" value="829a026f-0849-43e9-84a7-512e63f67d53" />
+                      <option name="size" value="1" />
+                    </Batch>
+                  </option>
+                  <option name="group" value="Codeforces - Codeforces Beta Round 4 (Div. 2 Only)" />
+                  <option name="input">
+                    <InputOutput>
+                      <option name="type" value="stdin" />
+                    </InputOutput>
+                  </option>
+                  <option name="languages">
+                    <Languages>
+                      <option name="java">
+                        <JavaLanguage>
+                          <option name="mainClass" value="Main" />
+                          <option name="taskClass" value="AWatermelon" />
+                        </JavaLanguage>
+                      </option>
+                    </Languages>
+                  </option>
+                  <option name="memoryLimit" value="64" />
+                  <option name="name" value="A. Watermelon" />
+                  <option name="output">
+                    <InputOutput>
+                      <option name="type" value="stdout" />
+                    </InputOutput>
+                  </option>
+                  <option name="tests">
+                    <list>
+                      <TestCase>
+                        <option name="input" value="8&#10;" />
+                        <option name="output" value="YES&#10;" />
+                      </TestCase>
+                    </list>
+                  </option>
+                  <option name="timeLimit" value="1000" />
+                  <option name="url" value="https://codeforces.com/problemset/problem/4/A" />
+                </Problem>
+              </option>
+              <option name="testCases">
+                <list>
+                  <TestCase>
+                    <option name="input" value="8&#10;" />
+                    <option name="output" value="YES&#10;" />
+                  </TestCase>
+                </list>
+              </option>
+            </ProblemData>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
