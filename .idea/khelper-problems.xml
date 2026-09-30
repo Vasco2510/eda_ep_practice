@@ -3,6 +3,65 @@
   <component name="KHelperProblems">
     <option name="problemsMap">
       <map>
+        <entry key="JAVA:a_efecto_cascada_grupo_1">
+          <value>
+            <ProblemData>
+              <option name="filePath" value="Z:\C26-2\EDA\ExamenEDA\Competitiva\src\main\java\problems\a_efecto_cascada_grupo_1\JSolution.java" />
+              <option name="language" value="JAVA" />
+              <option name="problem">
+                <Problem>
+                  <option name="batch">
+                    <Batch>
+                      <option name="id" value="b0a15b68-f466-4c78-a84e-4e5337ef4e21" />
+                      <option name="size" value="1" />
+                    </Batch>
+                  </option>
+                  <option name="group" value="Codeforces - Proyecto 2" />
+                  <option name="input">
+                    <InputOutput>
+                      <option name="type" value="stdin" />
+                    </InputOutput>
+                  </option>
+                  <option name="languages">
+                    <Languages>
+                      <option name="java">
+                        <JavaLanguage>
+                          <option name="mainClass" value="Main" />
+                          <option name="taskClass" value="AEfectoCascadaGrupo1" />
+                        </JavaLanguage>
+                      </option>
+                    </Languages>
+                  </option>
+                  <option name="memoryLimit" value="512" />
+                  <option name="name" value="A. Efecto cascada (Grupo 1)" />
+                  <option name="output">
+                    <InputOutput>
+                      <option name="type" value="stdout" />
+                    </InputOutput>
+                  </option>
+                  <option name="tests">
+                    <list>
+                      <TestCase>
+                        <option name="input" value="6 5&#10;4 -4&#10;-2 -5&#10;3 0&#10;-1 2&#10;4 2&#10;3 -3&#10;2 6 -2 2&#10;2 6 -4 -2&#10;-2 2 -2 2&#10;1 3 0 4&#10;-1 -1 -2 3&#10;" />
+                        <option name="output" value="2&#10;2&#10;1&#10;1&#10;1&#10;" />
+                      </TestCase>
+                    </list>
+                  </option>
+                  <option name="timeLimit" value="5000" />
+                  <option name="url" value="https://codeforces.com/group/apQ6meuqNq/contest/715162/problem/A" />
+                </Problem>
+              </option>
+              <option name="testCases">
+                <list>
+                  <TestCase>
+                    <option name="input" value="6 5&#10;4 -4&#10;-2 -5&#10;3 0&#10;-1 2&#10;4 2&#10;3 -3&#10;2 6 -2 2&#10;2 6 -4 -2&#10;-2 2 -2 2&#10;1 3 0 4&#10;-1 -1 -2 3&#10;" />
+                    <option name="output" value="2&#10;2&#10;1&#10;1&#10;1&#10;" />
+                  </TestCase>
+                </list>
+              </option>
+            </ProblemData>
+          </value>
+        </entry>
         <entry key="JAVA:a_watermelon">
           <value>
             <ProblemData>

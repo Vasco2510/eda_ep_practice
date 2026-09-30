@@ -8,18 +8,20 @@ eda — asistente de competitiva para el examen de EDA.
 
 Comandos (desde la raíz del proyecto, en PowerShell:  .\eda <comando>):
   eda                     listener de Competitive Companion + re-render en vivo (déjalo corriendo)
-  eda work                la IA resuelve el problema actual y deja lo de solve() en el portapapeles (ver TUTORIAL.md)
-  eda go                  TODO en uno: la IA resuelve → aplica a tu W → prueba → copia Main.java para Codeforces
+  eda autostart on|off    el listener arranca solo al iniciar Windows (segundo plano, sin ventana); status/restart
+  eda work                resuelve tu problema actual y deja lo de solve() en el portapapeles (ver TUTORIAL.md)
+  eda resp                corrige tu solución con la respuesta del juez que copiaste (Ctrl+A, Ctrl+C en el veredicto)
+  eda go                  resuelve tu problema y entrégalo: aplica a tu W → prueba → copia Main.java para Codeforces
   eda test   [slug]       genera F, lo compila y lo corre contra los tests de muestra   (atajo: eda t)
   eda copy   [slug]       copia F al portapapeles para pegar en Codeforces              (atajo: eda c)
   eda render [slug]       genera F una vez
   eda new <slug>          crea un problema a mano (si Competitive Companion no está disponible)
   eda use <slug>          cambia el problema actual
   eda list                lista los problemas
-  eda uso                 tokens que gastó eda work + cuánto llevas usado de tu plan de Claude (atajo: eda u)
+  eda uso                 unidades que gastó eda work + cuánto llevas usado de tu cupo (atajo: eda u)
   eda selftest            verifica las plantillas contra fuerza bruta
   eda demo                (re)crea el problema de práctica demo_pila
-  test/copy aceptan --work para usar entrega/<slug>/Main_ia.java (la solución de la IA sin pasar por tu W)
+  test/copy aceptan --work para usar entrega/<slug>/Main_w.java (lo que generó work, sin pasar por tu W)
   Atajos: w = work, t = test, c = copy, l = list, r = render, u = uso
 Sin [slug] se usa el problema actual (el último recibido o el elegido con `eda use`).
 """
@@ -48,16 +50,24 @@ W_NAME = "JSolution.java"
 W_CLASS = "JSolution"
 F_CLASS = "Main"
 
-DEFAULT_CONFIG = {"port": 27121, "watch_interval": 0.4, "run_timeout_s": 10}
+DEFAULT_CONFIG = {
+    "port": 27121, "watch_interval": 0.4, "run_timeout_s": 10,
+    "open_with": "code",        # editor que abre el W al recibir un problema ("code", "idea" o null)
+    "trigger_debounce": 2.0,    # segundos que //@work debe quedar sin cambios antes de disparar
+    "trigger_args": [],         # opciones extra para work/go cuando lo dispara el editor (p. ej. ["--effort", "medium"])
+    "notificaciones": True,     # globo de Windows al empezar/terminar
+}
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-if os.name == "nt":
+if os.name == "nt" and sys.stdout is not None and sys.stdout.isatty():
     os.system("")  # activa colores ANSI en la consola de Windows
 
 
 def c(text, color):
+    if os.environ.get("NO_COLOR"):
+        return text
     codes = {"red": 31, "green": 32, "yellow": 33, "blue": 34, "gray": 90, "bold": 1}
     return f"\033[{codes[color]}m{text}\033[0m"
 
@@ -191,8 +201,8 @@ def w_path(slug):
     return PROBLEMAS / slug / W_NAME
 
 
-def f_path(slug, ia=False):
-    return ENTREGA / slug / ("Main_ia.java" if ia else "Main.java")
+def f_path(slug, gen=False):
+    return ENTREGA / slug / ("Main_w.java" if gen else "Main.java")
 
 
 def all_slugs():
@@ -348,7 +358,7 @@ def compile_java(src: Path, out_dir: Path) -> tuple[bool, str]:
     shutil.rmtree(out_dir, ignore_errors=True)
     out_dir.mkdir(parents=True)
     target = src
-    if src.name != F_CLASS + ".java":  # p. ej. Main_ia.java: `public class Main` exige llamarse Main.java
+    if src.name != F_CLASS + ".java":  # p. ej. Main_w.java: `public class Main` exige llamarse Main.java
         target = out_dir / "_src" / (F_CLASS + ".java")
         target.parent.mkdir()
         shutil.copy(src, target)
@@ -362,12 +372,12 @@ def problem_meta(slug):
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
-def run_tests(slug, ia=False, verbose=True) -> tuple[bool, str]:
-    """Devuelve (todo_ok, reporte). Si ia=True prueba entrega/<slug>/Main_ia.java."""
-    src = f_path(slug, ia) if ia else render(slug, quiet=True)
+def run_tests(slug, gen=False, verbose=True) -> tuple[bool, str]:
+    """Devuelve (todo_ok, reporte). Si gen=True prueba entrega/<slug>/Main_w.java."""
+    src = f_path(slug, gen) if gen else render(slug, quiet=True)
     if not src.exists():
         raise SystemExit(c(f"✗ no existe {src.relative_to(ROOT)}", "red"))
-    out_dir = BUILD / (slug + ("_ia" if ia else ""))
+    out_dir = BUILD / (slug + ("_w" if gen else ""))
     report = []
 
     def say(line):
@@ -435,6 +445,12 @@ def _indent(s, limit=1200):
 # ---------------------------------------------------------------------------
 
 class CCHandler(BaseHTTPRequestHandler):
+    def do_GET(self):  # ping: permite saber que en este puerto ya corre el listener de eda
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"eda-listener")
+
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         self.send_response(200)
@@ -464,8 +480,98 @@ def open_in_editor(path: Path):
             pass
 
 
+# --- Disparador desde el editor: escribes `work` + Tab (snippet) → queda `//@work` en tu W → se resuelve ---
+
+MARKER_RE = re.compile(r"^[ \t]*//[ \t]*@work\b(?![ \t]+error\b)([^\r\n]*)$", re.M)
+# `//Respuesta: error [nota]` (o `//@work error`): corrige tu solución con la respuesta del juez copiada
+FIX_RE = re.compile(r"^[ \t]*//[ \t]*(?:Respuesta:[ \t]*error|@work[ \t]+error)\b([^\r\n]*)$", re.M | re.I)
+_jobs_running = set()
+_handled = {}   # slug -> hash del W tras el último trabajo: el mismo texto no vuelve a disparar
+_lock = threading.Lock()
+
+
+def strip_ansi(s: str) -> str:
+    return re.sub(r"\033\[[0-9;]*m", "", s)
+
+
+def notify(titulo: str, texto: str):
+    """Globo de notificación de Windows (mejor esfuerzo; no hace nada si falla o está desactivado)."""
+    if os.name != "nt" or not config().get("notificaciones", True):
+        return
+    import base64
+
+    def esc(x):
+        return " ".join(x.split())[:220].replace("'", "''")
+    ps = ("Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
+          "$n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; "
+          f"$n.Visible = $true; $n.ShowBalloonTip(8000, '{esc(titulo)}', '{esc(texto)}', 'Info'); "
+          "Start-Sleep 9; $n.Dispose()")
+    enc = base64.b64encode(ps.encode("utf-16-le")).decode()
+    try:
+        subprocess.Popen(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", enc],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except OSError:
+        pass
+
+
+def run_trigger(slug: str, args_text: str, kind: str = "work"):
+    """Lanza en segundo plano `go` (o su corrección) para este problema (uno a la vez por problema)."""
+    with _lock:
+        if slug in _jobs_running:
+            return
+        _jobs_running.add(slug)
+
+    def job():
+        try:
+            fix = kind == "fix"
+            rotulo = "corrigiendo (disparador)" if fix else "work (disparador)"
+            print(f"\n{c('▶ ' + rotulo, 'bold')} {slug}" + (f"  {'nota' if fix else 'plantillas'}: {args_text}" if args_text else ""))
+            notify("EDA work", f"{'Corrigiendo' if fix else 'Resolviendo'} {slug}… puede tardar un minuto. No edites JSolution.java mientras tanto.")
+            import work
+            ok, msg = work.trigger(slug, args_text, fix=fix)
+            print((c("✓ ", "green") if ok else c("✗ ", "red")) + msg)
+            notify("EDA work: listo" if ok else "EDA work: falló", f"{slug}: {msg}")
+        except BaseException as e:  # nunca tumbar el listener
+            print(c(f"✗ error en el disparador: {e}", "red"))
+        finally:
+            with _lock:
+                try:
+                    _handled[slug] = hash(w_path(slug).read_text(encoding="utf-8"))
+                except OSError:
+                    pass
+                _jobs_running.discard(slug)
+
+    threading.Thread(target=job, daemon=True).start()
+
+
+def check_trigger(slug: str, debounce: float, pending: dict):
+    """¿Hay un `//@work` o `//Respuesta: error` estable (sin cambios durante `debounce` s) en el W de este problema?"""
+    try:
+        text = w_path(slug).read_text(encoding="utf-8")
+    except OSError:
+        return
+    m = FIX_RE.search(text) or MARKER_RE.search(text)
+    if not m:
+        pending.pop(slug, None)
+        return
+    kind = "fix" if FIX_RE.search(text) else "work"
+    h = hash(text)
+    if slug in _jobs_running or _handled.get(slug) == h:
+        return
+    p = pending.get(slug)
+    if not p or p[0] != h:  # línea nueva o todavía cambiando (estás escribiendo nombres de plantillas)
+        pending[slug] = (h, time.time())
+        return
+    if time.time() - p[1] >= debounce:
+        pending.pop(slug, None)
+        run_trigger(slug, m.group(1).strip(), kind)
+
+
 def watch_loop(interval):
     seen = {}
+    pending = {}
+    debounce = float(config().get("trigger_debounce", 2.0))
     while True:
         try:
             tmpl = max((p.stat().st_mtime for p in PLANTILLAS.glob("*.java")), default=0)
@@ -478,28 +584,136 @@ def watch_loop(interval):
                         render(slug, quiet=first)
                     except SystemExit as e:
                         print(e)
+                check_trigger(slug, debounce, pending)
         except FileNotFoundError:
             pass  # archivo guardándose en ese instante
         time.sleep(interval)
 
 
-def cmd_start():
+# --- Segundo plano: sin ventana, con bitácora en .eda_listener.log ---
+
+LISTENER_LOG = ROOT / ".eda_listener.log"
+
+
+def listener_activo(port: int) -> bool:
+    import urllib.request
+    try:
+        return urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1.5).read() == b"eda-listener"
+    except Exception:
+        return False
+
+
+def modo_silencioso():
+    """Para correr sin consola (pythonw): salida a .eda_listener.log y ningún subproceso abre ventana."""
+    if LISTENER_LOG.exists() and LISTENER_LOG.stat().st_size > 1_000_000:
+        LISTENER_LOG.unlink()
+    log = open(LISTENER_LOG, "a", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stderr = log
+    os.environ["NO_COLOR"] = "1"
+    if os.name == "nt":
+        orig = subprocess.Popen.__init__
+
+        def init(self, *a, **kw):
+            kw["creationflags"] = kw.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
+            for k in ("stdin", "stdout", "stderr"):  # sin consola no hay handles heredables
+                if kw.get(k) is None:
+                    kw[k] = subprocess.DEVNULL
+            orig(self, *a, **kw)
+        subprocess.Popen.__init__ = init
+    print(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} listener iniciado (segundo plano) ===")
+
+
+class _Servidor(HTTPServer):
+    allow_reuse_address = False  # en Windows SO_REUSEADDR deja que DOS procesos escuchen el mismo puerto
+
+
+def cmd_start(silencioso=False):
     cfg = config()
     port = cfg["port"]
+    if silencioso:
+        modo_silencioso()
+    if listener_activo(port):
+        print(c(f"✓ el listener de eda ya está corriendo (puerto {port}, en otra ventana o en segundo plano): "
+                "no hace falta iniciarlo otra vez.", "green"))
+        return
     try:
-        server = HTTPServer(("127.0.0.1", port), CCHandler)
+        server = _Servidor(("127.0.0.1", port), CCHandler)
     except OSError:
-        raise SystemExit(c(f"✗ el puerto {port} está ocupado (¿otra instancia de eda o la extensión CPH de VS Code?). "
+        raise SystemExit(c(f"✗ el puerto {port} está ocupado por otro programa (¿la extensión CPH de VS Code?). "
                            f"Cambia 'port' en tools/config.json y agrégalo en Competitive Companion → Custom ports.",
                            "red"))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(c(f"eda escuchando Competitive Companion en el puerto {port}", "bold"))
     print(f"re-render en vivo: {c('src/problemas/*/JSolution.java', 'blue')} → {c('entrega/*/Main.java', 'blue')}")
-    print(c("Ctrl+C para salir", "gray"))
+    print(f"disparador: escribe {c('work', 'bold')} + Tab en un JSolution.java (deja //@work) → resuelve con el portapapeles")
+    if not silencioso:
+        print(c("Ctrl+C para salir", "gray"))
     try:
         watch_loop(cfg["watch_interval"])
     except KeyboardInterrupt:
         print("\nchao")
+
+
+def startup_dir() -> Path:
+    return Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+
+def _pythonw() -> str:
+    exe = Path(sys.executable)
+    pw = exe.with_name("pythonw.exe")
+    return str(pw if pw.exists() else exe)
+
+
+def iniciar_segundo_plano():
+    flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.Popen([_pythonw(), str(ROOT / "tools" / "eda.py"), "--silencioso"], cwd=ROOT, creationflags=flags,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def detener_listener(port: int) -> bool:
+    if not listener_activo(port):
+        return False
+    subprocess.run(["powershell", "-NoProfile", "-Command",
+                    f"Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue | "
+                    "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"], capture_output=True)
+    time.sleep(1)
+    return not listener_activo(port)
+
+
+def cmd_autostart(action: str):
+    """on: el listener arranca solo al iniciar sesión en Windows (y ahora). off: lo quita y lo detiene."""
+    port = config()["port"]
+    lnk = startup_dir() / "EDA listener.lnk"
+    if action == "on":
+        ps = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut('%s'); $s.TargetPath = '%s'; "
+              "$s.Arguments = '\"%s\" --silencioso'; $s.WorkingDirectory = '%s'; $s.WindowStyle = 7; "
+              "$s.Description = 'Listener de Competitive Companion (eda)'; $s.Save()"
+              % (lnk, _pythonw(), ROOT / "tools" / "eda.py", ROOT))
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True)
+        if r.returncode != 0 or not lnk.exists():
+            raise SystemExit(c(f"✗ no pude crear el acceso directo de inicio: {r.stderr.strip()}", "red"))
+        if not listener_activo(port):
+            iniciar_segundo_plano()
+            time.sleep(2)
+        print(c("✓ el listener arrancará solo cada vez que inicies sesión en Windows", "green"))
+        print(f"  acceso directo: {lnk}\n  estado ahora: {'corriendo' if listener_activo(port) else 'NO responde'}"
+              f" (puerto {port}) · bitácora: {LISTENER_LOG.relative_to(ROOT)}")
+        print("  para quitarlo:  .\\eda autostart off")
+    elif action == "off":
+        removed = lnk.exists()
+        if removed:
+            lnk.unlink()
+        stopped = detener_listener(port)
+        print(c("✓ quitado del inicio de Windows" if removed else "· no estaba en el inicio de Windows", "green"))
+        print("  listener detenido" if stopped else "  (no había listener en segundo plano corriendo)")
+    elif action == "restart":  # tras editar tools/*.py el listener sigue con el código viejo
+        detener_listener(port)
+        iniciar_segundo_plano()
+        time.sleep(2)
+        print(c("✓ listener reiniciado" if listener_activo(port) else "✗ no responde", "green"))
+    else:  # status
+        print(f"inicio automático de Windows: {'SÍ' if lnk.exists() else 'no'}  ({lnk})")
+        print(f"listener en el puerto {port}: {'corriendo' if listener_activo(port) else 'NO responde'}")
 
 
 # ---------------------------------------------------------------------------
@@ -577,19 +791,21 @@ ALIAS = {"w": "work", "t": "test", "c": "copy", "l": "list", "r": "render", "u":
 
 def main(argv):
     cmd = argv[0] if argv else "start"
-    cmd = ALIAS.get(cmd, cmd)
+    cmd = "start" if cmd == "--silencioso" else ALIAS.get(cmd, cmd)
     arg = argv[1] if len(argv) > 1 else None
     flags = {a for a in argv[1:] if a.startswith("--")}
     if arg and arg.startswith("--"):
         arg = next((a for a in argv[2:] if not a.startswith("--")), None)
 
     if cmd in ("start", "watch"):
-        cmd_start()
+        cmd_start("--silencioso" in argv)
+    elif cmd == "autostart":
+        cmd_autostart(arg or "status")
     elif cmd == "render":
         render(current_slug(arg))
     elif cmd == "test":
         slug = current_slug(arg)
-        ok, _ = run_tests(slug, ia="--work" in flags)
+        ok, _ = run_tests(slug, gen="--work" in flags)
         if ok and "--copy" in flags:
             copy_to_clipboard(f_path(slug, "--work" in flags))
         sys.exit(0 if ok else 1)
@@ -613,16 +829,14 @@ def main(argv):
         cmd_selftest()
     elif cmd == "demo":
         cmd_demo()
-    elif cmd in ("work", "go"):
+    elif cmd in ("work", "go", "resp"):
         sys.path.insert(0, str(ROOT / "tools"))
         import work
-        sys.exit((work.go if cmd == "go" else work.solve)(argv[1:]))
+        sys.exit({"go": work.go, "resp": work.resp}.get(cmd, work.solve)(argv[1:]))
     elif cmd == "uso":
         sys.path.insert(0, str(ROOT / "tools"))
         import work
         sys.exit(work.uso(argv[1:]))
-    elif cmd == "ia":
-        raise SystemExit(c("✗ el comando `ia` ahora se llama `work`:  .\\eda work   (todo en uno: .\\eda go)", "red"))
     elif cmd in ("-h", "--help", "help"):
         print(__doc__)
     else:

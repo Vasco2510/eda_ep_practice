@@ -6,21 +6,30 @@ archivo. **F es lo que se envía a Codeforces**; nunca se edita a mano.
 
 Hay dos formas de llegar a la solución, y se pueden combinar:
 
-| | Modo manual | Modo `work` (con IA) |
-|---|---|---|
-| Quién escribe `solve()` | Tú | La IA (Claude Sonnet 5.5; respaldo Groq) |
-| Comando clave | `.\eda test` | `.\eda go` (todo) o `.\eda work` (tú pegas) |
-| Qué se envía | `entrega/<slug>/Main.java` | `entrega/<slug>/Main.java` |
+| | Modo manual | Modo `work` | Disparador (sin comandos) |
+|---|---|---|---|
+| Quién codea `solve()` | Tú | `work` (motor A; motor B de respaldo) | `work` |
+| Cómo lo inicias | `.\eda test` | `.\eda go` (todo) o `.\eda work` (tú pegas) | En `JSolution.java`: `work` + Tab |
+| Qué se envía | `entrega/<slug>/Main.java` | `entrega/<slug>/Main.java` | `entrega/<slug>/Main.java` |
 
 ---
 
 ## 1. Flujo completo: del problema a Codeforces
 
-### Paso 0 — Preparar (al abrir VS Code)
-Abre la carpeta `Competitiva`. El listener de Competitive Companion **arranca solo** (VS Code puede
-preguntar si permites tareas automáticas: di **Allow**). Si no arrancó, escribe `.\eda` en una
-terminal y déjala abierta. Verás: `eda escuchando Competitive Companion en el puerto 27121`.
+### Paso 0 — Tener el listener corriendo (elige una forma, una sola vez)
+El listener es el programa que recibe los problemas de Competitive Companion (y, en el modo disparador,
+las órdenes de `work`). Tres formas de tenerlo:
+
+| Forma | Cómo | Cuándo conviene |
+|---|---|---|
+| **En segundo plano desde que inicias Windows** (recomendada) | `.\eda autostart on` una sola vez. Crea un acceso directo en el inicio de Windows y lo arranca ya. Sin ventana; bitácora en `.eda_listener.log`. Quitarlo: `.\eda autostart off`; estado: `.\eda autostart status` | No quieres pensar en él: funciona aunque VS Code esté cerrado |
+| Al abrir VS Code | La tarea *EDA: iniciar* arranca sola al abrir la carpeta `Competitiva` (VS Code puede preguntar si permites tareas automáticas: **Allow**) | No quieres nada instalado en el inicio de Windows |
+| A mano | `.\eda` en una terminal que dejas abierta | Depuración |
+
+Si el listener ya está corriendo, iniciar otro solo avisa `el listener de eda ya está corriendo` y termina
+(no se duplican). Verás al arrancar: `eda escuchando Competitive Companion en el puerto 27121`.
 Para los demás comandos abre **otra** terminal (el `+` del panel).
+**Tras editar `tools/*.py`** (o tras actualizar el proyecto) el listener en segundo plano sigue con el código viejo: `.\eda autostart restart`.
 
 ### Paso 1 — Recibir el problema (común a los dos modos)
 En Codeforces, abre el problema y haz clic en el ícono verde de **Competitive Companion**.
@@ -47,43 +56,90 @@ Si el problema ya existía, **tu código no se toca**: solo se actualizan los te
 3. Guarda (Ctrl+S) y corre **`.\eda test`**. Debe dar `N/N tests OK`.
 4. Corre **`.\eda copy`** (o `.\eda test --copy`, que copia solo si todo pasó).
 
-#### Modo `work` (la IA escribe la solución)
+#### Modo `work` (resuelve tu problema)
 1. En la **misma página del problema: Ctrl+A, Ctrl+C.** Copia el enunciado al portapapeles.
 2. Elige cuánto quieres automatizar:
 
    | Comando | Qué hace | Después tú |
    |---|---|---|
-   | **`.\eda go`** | La IA resuelve → aplica la solución a tu W → prueba tu W → copia `Main.java` | Pegas en Codeforces. **Terminaste** |
-   | **`.\eda work`** | La IA resuelve y deja en el portapapeles solo lo que va en tu W (imports + `solve()`) | Pegas en `JSolution.java`, `.\eda test`, `.\eda copy` |
-   | `.\eda work --completo` | La IA resuelve y deja `Main_ia.java` completo (sin pasar por tu W) | Pegas en Codeforces |
+   | **`.\eda go`** | Resuelve tu problema y entrégalo: aplica a tu W → prueba tu W → copia `Main.java` | Pegas en Codeforces. **Terminaste** |
+   | **`.\eda work`** | Resuelve tu problema y deja en el portapapeles solo lo que va en tu W (imports + `solve()`) | Pegas en `JSolution.java`, `.\eda test`, `.\eda copy` |
+   | `.\eda work --completo` | Resuelve tu problema y deja `Main_w.java` completo (sin pasar por tu W) | Pegas en Codeforces |
 
-   Tarda entre 20 s y un par de minutos. Verás la explicación de la IA y cada intento con sus tests.
+   Tarda entre 20 s y un par de minutos. Verás la explicación y cada intento con sus tests.
    **Solo entrega algo si pasa los tests de ejemplo** (hasta 4 intentos, corrigiéndose con el error).
 3. Con `go` el flujo termina así:
    ```
-   ✓ IA resolvió cf710567D en 1 intento(s), 22 s
+   Pasamos test en cf710567D en 1 intento(s), 22 s
    ✓ solución aplicada a tu W: src\problemas\cf710567D\JSolution.java
    ── probando tu W con los ejemplos ──
    ✓ OK  sample1 …          3/3 tests OK
    ✓ LISTO: entrega/cf710567D/Main.java está en el portapapeles → pégalo en Codeforces (Java 21)
    ```
-   Si tu W ya tenía código, la IA lo guarda antes en `JSolution.HHMMSS.antes.txt` (junto a tu W).
+   Si tu W ya tenía código, se guarda antes en `JSolution.HHMMSS.antes.txt` (junto a tu W).
 4. Con `work` (modo "tú pegas"), el portapapeles trae tres cosas: el `import plantillas.…` (va arriba,
    con los otros imports), `solve()` con sus funciones auxiliares (reemplaza tu `solve()` vacío) y, si lo
    avisa, hay que descomentar `t = in.nextInt();` en `main()`.
 
 **Obligar a usar una plantilla** (por ejemplo, en un simulacro donde se pide usar la persistencia):
-`.\eda go --usar PersistentLeftistHeap`. Si la IA resuelve sin ella, el intento se rechaza.
+`.\eda go --usar PersistentLeftistHeap`. Si sale sin ella, el intento se rechaza.
+
+#### Modo disparador: `work` + Tab dentro del editor (sin escribir comandos)
+Es el mismo `go`, pero se dispara desde `JSolution.java`. Requiere el listener corriendo (Paso 0).
+
+1. **Companion:** clic en la página del problema. Se crea el problema y **`JSolution.java` se abre solo
+   en VS Code** (`open_with`).
+2. **Copia el enunciado:** Ctrl+A, Ctrl+C en la página (antes de disparar; el listener lo lee en ese momento).
+3. **En `JSolution.java`, en una línea vacía, escribe `work` y presiona `Tab`.** Se inserta `//@work`.
+   Opcional, en la misma línea, nombres de plantillas para obligar a usarlas: `//@work PersistentTreap`.
+4. **Espera.** VS Code guarda solo (autoguardado de 0,8 s), el listener ve la línea (espera 2 s sin
+   cambios, por si sigues escribiendo nombres) y aparece un **globo de Windows: "Resolviendo…"**. Tarda
+   entre 20 s y un par de minutos. **No edites `JSolution.java` mientras tanto.**
+5. **Termina** con otro globo ("listo" o "falló"). Si salió bien: tu `JSolution.java` ya tiene la
+   solución (la línea `//@work` desaparece), `entrega/<slug>/Main.java` está generado y **también está
+   en el portapapeles**: pégalo en Codeforces. Si tu W tenía código, quedó en `JSolution.HHMMSS.antes.txt`.
+6. **Si falló:** en lugar de `//@work` queda un comentario `// work falló: <motivo>` (por ejemplo, que no
+   encontró el enunciado en el portapapeles). Corrígelo (copia el enunciado) y escribe `work` + Tab otra
+   vez. Detalle en `entrega/<slug>/w/log.md`; si algo raro pasa, mira `.eda_listener.log`.
+
+Notas: el snippet `work` está en `.vscode/eda.code-snippets` y necesita en `.vscode/settings.json`
+`files.autoSave` (guardado automático) y `editor.tabCompletion: onlySnippets` (Tab expande snippets);
+ambos ya están puestos. Usa los mismos motores que `work`/`go` (PRIVADO.md). Opciones extra para
+el disparador (p. ej. `["--effort", "medium"]`): `trigger_args` en `tools/config.json`.
+
+#### Cuando el juez rechaza tu envío: `resp` (respuesta y corrección)
+Si Codeforces responde con error (Runtime error, Wrong answer, Time limit…), en vez de reescribir a mano:
+
+1. En el resultado del envío: **Ctrl+A, Ctrl+C** (el veredicto completo: caso, salida, log del checker).
+2. En `JSolution.java`, en una línea vacía, escribe **`resp`** y **Tab**. Se inserta `//Respuesta: error`.
+   Puedes agregar una nota en la misma línea: `//Respuesta: error creo que es el caso n=1`.
+3. Espera el globo *"Corrigiendo…"*. Se toma el veredicto del portapapeles y se envía junto con el enunciado y
+   **tu código enviado**; se busca la causa real y se corrige. Si el veredicto trae **entrada y respuesta
+   correcta** (Wrong answer), ese caso queda como test local (`tests/juezN.in` / `.out`) y la corrección tiene
+   que pasarlo también.
+4. Al terminar: tu `JSolution.java` trae la corrección y el nuevo `Main.java` ya está en el portapapeles.
+   Repite las veces que haga falta.
+
+Desde la terminal: `.\eda resp` (mismo efecto, toma el portapapeles). Notas:
+- Hay que haber resuelto antes con `work`/`go`: así queda guardado el enunciado (`enunciado.md`) y hay una solución en tu W.
+- Sigue el mismo hilo: sabe lo que ya intentó. El veredicto queda en `entrega/<slug>/w/respuesta_juez.md` y la
+  bitácora `w/log.md` se **agrega** (no se pisa).
+- Si copiaste otra cosa (por ejemplo el enunciado), el aviso queda en tu W: `// work falló: …`.
+- **Antes de enviar, mira que sea el problema correcto.** Un error de lectura de entrada (`NumberFormatException:
+  Cannot parse null string`) en el ejemplo casi siempre es un `Main.java` de otro problema. `.\eda copy` copia el
+  del problema *actual*; con varios abiertos usa `.\eda copy <slug>`.
 
 ### Paso 3 — Enviar
 1. Si no lo hiciste ya: **`.\eda copy`** copia `entrega/<slug>/Main.java`.
-   (Sin pasar por W, la solución de la IA está en `.\eda copy --work`.)
+   (Sin pasar por W, lo de `work` está en `.\eda copy --work`.)
 2. En Codeforces → **Submit Code** → Lenguaje **Java 21** → pega → Submit. Es un solo archivo con
    `public class Main`, sin `package` ni `import plantillas`.
 
 ### Resumen de una línea
 ```
-Companion (clic)  →  [manual: escribe solve() → .\eda test]  o  [work: Ctrl+A, Ctrl+C → .\eda go]  →  .\eda copy  →  pegar en Codeforces
+Companion (clic)  →  [manual: escribe solve() → .\eda test]  o  [work: Ctrl+A, Ctrl+C → .\eda go]
+                  o  [disparador: Ctrl+A, Ctrl+C → en JSolution.java "work" + Tab]      →  .\eda copy  →  pegar en Codeforces
+                                                                            (go y el disparador ya dejan Main.java en el portapapeles)
 ```
 
 ---
@@ -94,16 +150,18 @@ Escríbelos en PowerShell dentro de `Competitiva` con el prefijo `.\eda`. Sin `[
 
 | Comando (atajo) | Qué hace |
 |---|---|
-| `.\eda` | Listener de Competitive Companion + re-render de F en vivo. Déjalo abierto |
-| `.\eda go` | **Todo en uno con IA**: resuelve → aplica a tu W → prueba → copia `Main.java` |
-| `.\eda work` (`w`) | La IA resuelve y deja en el portapapeles lo que va en tu W |
+| `.\eda` | Listener de Competitive Companion + re-render de F en vivo + disparador `work` + Tab. Déjalo abierto (o usa `autostart`) |
+| `.\eda autostart on` / `off` / `status` / `restart` | El listener arranca solo al iniciar Windows, en segundo plano y sin ventana (Paso 0) |
+| `.\eda go` | **Resuelve tu problema y entrégalo**: aplica a tu W → prueba → copia `Main.java` |
+| `.\eda work` (`w`) | Resuelve tu problema y deja en el portapapeles lo que va en tu W |
 | `.\eda test` (`t`) | Genera F, lo compila y lo corre contra `tests/*.in`. Muestra OK / WA / RE / TLE con la diferencia |
 | `.\eda test --copy` | Igual, y si todo pasa copia F al portapapeles |
-| `.\eda copy` (`c`) | Copia `Main.java` al portapapeles |
+| `.\eda resp` | Corrige tu solución con la respuesta del juez que copiaste (§1) |
+| `.\eda copy` (`c`) | Copia `Main.java` al portapapeles (`.\eda copy <slug>` para uno concreto) |
 | `.\eda render` (`r`) | Genera F una vez (el listener ya lo hace solo) |
 | `.\eda new <slug>` | Crea un problema a mano (sin Competitive Companion) |
 | `.\eda use <slug>` / `.\eda list` (`l`) | Cambia / lista los problemas |
-| `.\eda uso` (`u`) | Tokens que gastó `work` en esta máquina + cuánto llevas usado de tu plan de Claude (§5) |
+| `.\eda uso` (`u`) | Unidades que gastó `work` en esta máquina + cuánto llevas usado de tu cupo (§5) |
 | `.\eda selftest` | Verifica todas las plantillas (~420 mil comprobaciones contra fuerza bruta) |
 | `.\eda demo` | Crea o reinicia el problema de práctica `demo_pila` |
 
@@ -113,11 +171,12 @@ Opciones de `work` y `go`:
 |---|---|
 | `--usar A,B` | Obliga a usar esas plantillas |
 | `--aplicar` | (`work`) escribe la solución en tu W en vez de copiarla (es lo que hace `go`) |
-| `--completo` | (`work`) copia `Main_ia.java` completo |
+| `--completo` | (`work`) copia `Main_w.java` completo |
 | `--clip` / `--forzar` | Exige el portapapeles como enunciado (ver §5); `--forzar` salta la verificación |
-| `--nueva-sesion` | Abre una conversación nueva con Claude (por defecto continúa la anterior) |
-| `--proveedor X`, `--modelo Y`, `--effort Z`, `--intentos N` | Elige proveedor (`claude-code`, `groq`, `anthropic`, `ollama`), modelo, esfuerzo y nº de intentos |
-| `--ping` | Prueba la conexión con la IA con una solicitud mínima |
+| `--nueva-sesion` | Abre un hilo nuevo (por defecto continúa el anterior) |
+| `--error` / `--nota "…"` | (`work`) corrige con el veredicto del portapapeles (es lo que hace `resp`); nota opcional |
+| `--proveedor A\|B\|C\|D`, `--modelo Y`, `--effort Z`, `--intentos N` | Motor, versión, esfuerzo y nº de intentos (detalle en PRIVADO.md) |
+| `--ping` | Prueba la conexión con una solicitud mínima |
 | `--uso` | Al terminar, muestra cuánto bajó tu plan por esta resolución (consulta `/usage` antes y después) |
 
 (`--solve` y `--copy` siguen funcionando: son el modo por defecto de `work` y `--completo`.)
@@ -127,7 +186,7 @@ Opciones de `work` y `go`:
 *Tasks: Run Test Task* corre `EDA: test`. Para atajos de teclado, agrega esto a `keybindings.json`
 (Ctrl+Shift+P → "Preferences: Open Keyboard Shortcuts (JSON)"):
 ```json
-{ "key": "ctrl+alt+g", "command": "workbench.action.tasks.runTask", "args": "EDA: go (IA resuelve → aplica a tu W → prueba → copia Main.java)" },
+{ "key": "ctrl+alt+g", "command": "workbench.action.tasks.runTask", "args": "EDA: go (resuelve tu problema y entrégalo)" },
 { "key": "ctrl+alt+t", "command": "workbench.action.tasks.runTask", "args": "EDA: test" },
 { "key": "ctrl+alt+c", "command": "workbench.action.tasks.runTask", "args": "EDA: copiar Main.java" }
 ```
@@ -146,8 +205,8 @@ Competitiva/
 │   └── problem.json         nombre, URL y límites
 ├── entrega/<slug>/
 │   ├── Main.java            ← F: lo que se envía (se genera solo)
-│   ├── Main_ia.java         la solución de la IA renderizada (sin pasar por tu W)
-│   └── ia/                  JSolution.java de la IA, solve.java.txt y log.md (explicación + intentos)
+│   ├── Main_w.java          lo que generó work, renderizado (sin pasar por tu W)
+│   └── w/                   JSolution.java de work, solve.java.txt, log.md y respuesta_juez.md
 ├── tools/                   eda.py, work.py, plantilla de W, config, claves.env (tus claves; no se sube a git)
 ├── tests/PlantillasTest.java verificación de las plantillas contra fuerza bruta
 └── borradores/              tus archivos anteriores
@@ -228,94 +287,29 @@ Crea `src/plantillas/Nombre.java` con `package plantillas;` y **una** clase `pub
 declarada en la columna 0 (como las existentes). El render le quita el `public` y la pega al final de F.
 Si una plantilla usa otra, la incluye sola. Después corre `.\eda selftest`.
 **Comenta bien la plantilla:** el bloque `/** … */` de arriba (qué es, cuándo usarla, un ejemplo) y una
-línea encima de cada método público. De ahí sale el manual que lee la IA (§5).
+línea encima de cada método público. De ahí sale la guía que usa `work` (PRIVADO.md).
 
 ---
 
-## 5. La IA (`work` / `go`) en detalle
+## 5. Motores, cupo y consumo
 
-### Qué proveedor usa
-- **Principal:** Claude Sonnet 5.5 a través de **Claude Code**, con tu plan de Claude (sin API key ni costo aparte).
-- **Respaldo automático: Groq (gratis).** Solo entra si Claude Code falla: no instalado, sin sesión, límite de
-  uso alcanzado o cualquier error. Si pasas `--proveedor X` a mano, no hay respaldo.
+`work`, `go` y `resp` usan un **motor principal (A)** y, si falla (sin sesión, límite de uso, error), siguen solos
+con un **motor de respaldo (B)**. Qué es cada uno, cómo configurarlo, sus límites, el hilo continuo y la guía de
+plantillas: **`PRIVADO.md`** (archivo local; no se sube al repo).
 
-### Cómo sabe qué plantillas hay y cómo usarlas
-Se le envía un **manual** generado automáticamente desde `src/plantillas/` (~4 600 tokens; los archivos
-completos serían ~13 600): para cada plantilla, qué es, cuándo usarla, un ejemplo y cada método público
-con lo que hace, recibe y devuelve. **Nunca se le manda el código fuente.** Si agregas o modificas una
-plantilla, el manual se actualiza solo en la siguiente ejecución.
-
-### Sesión continua (como un chat)
-Con Claude Code, cada problema **continúa la misma conversación** que el anterior: el manual queda en
-caché (en la prueba: 465 tokens nuevos frente a 9 214 leídos de caché en el segundo problema) y la IA ya
-conoce tus reglas. Los reintentos de un problema ven sus propios errores. Se abre sesión nueva sola si
-cambian las plantillas o el modelo, cada 8 problemas, o con `--nueva-sesion` (úsalo si un problema
-anterior confundió a la IA). Se guarda en `.eda_ia_session.json` (no se sube a git).
-
-### El enunciado
-Competitive Companion **no envía el enunciado**, solo los tests. `work`/`go` lo toman así:
-1. **Del portapapeles, automáticamente,** solo si parece el enunciado **de este problema**: es texto largo
-   con "Input/Output" (o Entrada/Salida), no es código, y **menciona el título** que envió Companion
-   (p. ej. «Ejercito supremo»). Si no cumple, lo ignora y avisa (así no resuelve otro problema por error).
-   `--clip` fuerza este modo y falla con un mensaje claro si no coincide; `--forzar` lo salta.
-2. Si el portapapeles no sirve: `src/problemas/<slug>/enunciado.md` / `.txt` (donde se guardó la última
-   vez) o un `.pdf` en esa carpeta. El PDF lo lee bien Claude; con Groq se extrae el texto y **se pierden
-   fórmulas y variables** de PDFs impresos.
-3. La URL del problema: solo funciona en el problemset público; en grupos privados Codeforces pide login.
-
-### ¿Cuánto consumí y cuánto me queda?
-Con Claude Code (tu plan) el límite no es en dinero ni en tokens exactos: Anthropic solo informa el
-**porcentaje usado** de dos ventanas, la **sesión de 5 horas** y la **semana**, y cuándo se reinician.
-
-| Qué quieres saber | Cómo |
-|---|---|
-| Tokens de **esa respuesta** | Cada llamada imprime `tokens: entrada N (+M de caché), salida K`. Al terminar, `work`/`go` suma la resolución: `consumo de esta resolución: …`. También queda en `entrega/<slug>/ia/log.md` |
-| Cuánto **te queda del plan** | **`.\eda uso`** → `Sesión de 5 h: 44% usado → te queda ≈ 56% (se reinicia …)` y lo mismo para la semana |
-| Cuánto **bajó el plan por una resolución** | `.\eda go --uso` (o `work --uso`): consulta `/usage` antes y después y muestra la diferencia en puntos |
-| Directo con Claude, desde la terminal | `claude -p "/usage"` en **PowerShell** (en Git Bash la `/` se convierte en ruta y no funciona). Interactivo: `claude` y luego `/usage` (`d`/`w` cambian entre 24 h y 7 días; `--completo` en `eda uso` imprime todo el texto) |
-
-Cómo leerlo:
-- El porcentaje es de **toda tu cuenta** (claude.ai, Claude Code, otras conversaciones), no solo de `eda`.
-  Una resolución típica pesa poco (la sesión con el manual en caché lee ~9 mil tokens de caché y escribe
-  cientos); lo que más consume son las **conversaciones largas**, porque cada mensaje reenvía todo el
-  historial. `/usage` marca ese efecto ("% de tu uso fue con >150k de contexto"): para tareas nuevas, abre
-  una conversación nueva.
-- El `≈ $` que imprime `work` es lo que costaría la misma llamada en la API de pago; con tu plan **no se
-  cobra**, solo gasta de tus límites. Con Groq no se consume tu plan (tiene su propio límite diario).
-- `--uso` tiene resolución de 1 punto y mide todo lo que pase en tu cuenta durante la resolución: úsalo
-  sin otras conversaciones activas para que la diferencia sea fiel.
-- Cuando se agota la sesión de 5 h, `work` sigue solo con Groq (respaldo). Los datos de consumo por
-  llamada se guardan en `.eda_uso.jsonl` (no se sube a git).
-
-### Configurar
-**Claude Code (una vez):**
-1. Instalar: `irm https://claude.ai/install.ps1 | iex` (PowerShell). Requiere plan Pro/Max/Team/Enterprise.
-2. Abre una terminal nueva y comprueba: `claude --version`. Si no se reconoce, agrega
-   `C:\Users\<tu usuario>\.local\bin` (la **carpeta**, no `claude.exe`) al PATH de usuario y reabre VS Code.
-3. Iniciar sesión: `claude auth login` (se abre el navegador; usa tu cuenta de claude.ai). Comprueba con
-   `claude auth status --text`.
-4. Prueba: `.\eda work --ping` → `✓ el proveedor respondió: OK`.
-
-**Groq (respaldo, gratis):**
-1. Crea la clave en https://console.groq.com → **API Keys** → **Create API Key** (empieza con `gsk_`).
-2. `Copy-Item tools\claves.env.example tools\claves.env`, abre `tools\claves.env` y deja una línea:
-   `GROQ_API_KEY=gsk_tu_clave`. El archivo está en `.gitignore` (no se sube al repo).
-   (Alternativa: `setx GROQ_API_KEY "gsk_..."` y reabrir VS Code.)
-3. Prueba: `.\eda work --ping --proveedor groq`.
-**Cuida la clave:** no la pegues en chats, commits ni capturas. Si se filtra, bórrala en *API Keys* y crea otra.
-Límites del plan gratis (`openai/gpt-oss-120b`): 8 000 tokens/min y 200 000/día; si dice "espera N s", `eda`
-espera solo. Con Groq las plantillas van en versión compacta.
-
-**Ajustes permanentes** (`tools/config.json`, todos opcionales):
-```json
-{ "ia_proveedor": "claude-code", "ia_respaldo": "groq", "ia_modelo": "claude-sonnet-5-5",
-  "ia_effort": "high", "ia_intentos": 4, "ia_max_problemas_sesion": 8 }
-```
-`ia_respaldo: null` desactiva el respaldo. `ia_effort`: `medium` es más rápido y gasta menos; `xhigh`/`max`
-para problemas muy difíciles. Otros proveedores: `anthropic` (API de pago) y `ollama` (local, más débil).
-
-**Ojo:** "pasa los tests" significa que pasa los **ejemplos** (y los tests que agregues en `tests/`). Puede
-pasarlos y aun así ser incorrecta o lenta en Codeforces: lee la explicación en `entrega/<slug>/ia/log.md`.
+- **Probar la conexión:** `.\eda work --ping`.
+- **¿Cuánto llevo gastado y cuánto me queda?** `.\eda uso` (unidades por llamada y % de tu cupo, con la hora de
+  reinicio). `.\eda go --uso` muestra cuánto bajó tu cupo por esa resolución. `.\eda uso --completo` imprime el detalle.
+- **El enunciado:** `work`/`go` toman el del portapapeles automáticamente, **solo si es el de este problema** (texto
+  largo con Input/Output, no es código y menciona el título que envió Companion). Si no, usan `enunciado.md`/`.pdf`
+  de la carpeta del problema o la URL. `--clip` lo exige (falla si no coincide); `--forzar` salta la verificación.
+- **Hilo continuo:** cada problema continúa el hilo del anterior (la guía de plantillas queda en caché);
+  `--nueva-sesion` abre un hilo nuevo si algo se confunde.
+- **Ajustes** (`tools/config.json`, todos opcionales): `w_motor`, `w_respaldo`, `w_version`, `w_esfuerzo`, `w_intentos`,
+  `w_max_problemas_hilo`, `open_with` (editor que abre el W al recibir un problema), `trigger_debounce`, `trigger_args`,
+  `notificaciones`. Valores y significado: `PRIVADO.md`.
+- **Ojo:** "pasa los tests" significa que pasa los **ejemplos** (y los que agregues en `tests/`). Puede pasarlos y aun
+  así fallar en Codeforces: lee la explicación en `entrega/<slug>/w/log.md`, y si el juez lo rechaza usa **`resp`** (§1).
 
 ---
 
@@ -324,16 +318,21 @@ pasarlos y aun así ser incorrecta o lenta en Codeforces: lee la explicación en
 | Síntoma | Qué hacer |
 |---|---|
 | `.\eda` no se reconoce | La terminal debe estar en `…\Competitiva` |
-| "el puerto 27121 está ocupado" | Ya hay otra instancia de `eda` abierta (cierra la terminal vieja) o la extensión CPH |
+| Escribo `work` y Tab pero no pasa nada | ¿Está el listener? `.\eda autostart status`. ¿Quedó la línea `//@work` (si no, el snippet no se expandió: escríbela a mano)? ¿Se guardó el archivo (autoguardado)? ¿Es una línea propia, no al final de otra? Mira `.eda_listener.log` |
+| `resp` + Tab y no pasa nada | Igual que `work`: ¿listener corriendo?, ¿quedó la línea `//Respuesta: error`?, ¿se guardó? Y ¿copiaste el veredicto (Ctrl+A, Ctrl+C en el resultado del envío)? |
+| Quedó `// work falló: …` en mi W | Lee el motivo, corrígelo (p. ej. copia el enunciado con Ctrl+A, Ctrl+C) y escribe `work` + Tab otra vez |
+| El disparador usa código viejo después de editar `tools/*.py` | `.\eda autostart restart` |
+| No aparecen los globos de Windows | Revisa que el modo "No molestar" esté apagado; el resultado igual queda en tu W y en `.eda_listener.log` (`"notificaciones": false` los desactiva) |
+| "el puerto 27121 está ocupado por otro programa" | Lo usa otra cosa (p. ej. la extensión CPH): cambia `port` en `tools/config.json` y agrégalo en Companion → Custom ports. (Si es otro `eda`, solo avisa que ya corre) |
 | Companion no envía nada | Abre un problema **individual** (no la lista del concurso), recarga la página y revisa que el listener siga corriendo |
 | `el portapapeles no parece el enunciado de este problema` | Estás en otra página o copiaste otra cosa: en la página del problema, Ctrl+A, Ctrl+C. `--forzar` si es correcto |
 | `no tengo el enunciado` | Copia el enunciado (Ctrl+A, Ctrl+C) y repite el comando |
-| `Claude Code falló … límite de uso` | Sigue solo con Groq. Si no hay respaldo, espera el reinicio de tu límite |
-| `no hay respaldo: falta GROQ_API_KEY` | Configura Groq (§5) para tener respaldo |
-| `no encuentro Claude Code` / `no has iniciado sesión` | §5: instalar y `claude auth login` |
-| `GROQ_API_KEY inválida` | Revisa `tools/claves.env` (sin espacios ni comillas de más) |
-| `la IA no logró pasar los tests` | Lee `entrega/<slug>/ia/log.md`; prueba `--nueva-sesion`, `--effort xhigh` o `--intentos 6` |
-| La IA "olvida" reglas o se confunde | `--nueva-sesion` |
+| `motor A falló … límite de uso` | Sigue solo con el motor B. Si no hay respaldo, espera el reinicio de tu cupo |
+| `no hay respaldo: falta la clave del motor B` | Configúralo (PRIVADO.md) para tener respaldo |
+| `no encuentro el motor A` / `sin sesión iniciada` | Ver PRIVADO.md |
+| `clave del motor B inválida` | Revisa `tools/claves.env` (sin espacios ni comillas de más) |
+| `no salió: los tests siguen fallando` | Lee `entrega/<slug>/w/log.md`; prueba `--nueva-sesion`, `--effort xhigh` o `--intentos 6` |
+| El hilo se confunde | `--nueva-sesion` |
 | VS Code subraya `plantillas` en rojo | Ctrl+Shift+P → "Java: Clean Java Language Server Workspace" → Restart |
 | La tarea automática no arranca | Ctrl+Shift+P → "Tasks: Manage Automatic Tasks" → Allow, o usa `.\eda` en una terminal |
 

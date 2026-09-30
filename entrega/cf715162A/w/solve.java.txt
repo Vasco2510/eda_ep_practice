@@ -1,0 +1,72 @@
+// imports (van arriba, junto a los tuyos):
+import plantillas.PersistentSegmentTree;
+
+    // cantidad de elementos < v en arr ordenado
+    static int lowerBound(int[] arr, int v) {
+        int lo = 0, hi = arr.length;
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (arr[mid] < v) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    }
+    // cantidad de elementos <= v en arr ordenado
+    static int upperBound(int[] arr, int v) {
+        int lo = 0, hi = arr.length;
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (arr[mid] <= v) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    }
+    static void solve() {
+        int n = in.nextInt();
+        int q = in.nextInt();
+        int[] px = new int[n];
+        int[] py = new int[n];
+        for (int i = 0; i < n; i++) {
+            px[i] = in.nextInt();
+            py[i] = in.nextInt();
+        }
+        Integer[] idx = new Integer[n];
+        for (int i = 0; i < n; i++) idx[i] = i;
+        Arrays.sort(idx, (u, v) -> Integer.compare(px[u], px[v]));
+
+        int[] xs = new int[n];
+        for (int i = 0; i < n; i++) xs[i] = px[idx[i]];
+
+        int[] sortedY = py.clone();
+        Arrays.sort(sortedY);
+        int m = 0;
+        int[] ys = new int[n];
+        for (int i = 0; i < n; i++) {
+            if (i == 0 || sortedY[i] != sortedY[i - 1]) ys[m++] = sortedY[i];
+        }
+        ys = Arrays.copyOf(ys, m);
+
+        PersistentSegmentTree tree = new PersistentSegmentTree(1, m);
+        int[] pre = new int[n + 1];
+        pre[0] = 0;
+        for (int i = 1; i <= n; i++) {
+            int rk = lowerBound(ys, py[idx[i - 1]]) + 1;
+            pre[i] = tree.add(pre[i - 1], rk, 1);
+        }
+
+        for (int i = 0; i < q; i++) {
+            int l1 = in.nextInt();
+            int r1 = in.nextInt();
+            int l2 = in.nextInt();
+            int r2 = in.nextInt();
+            int lo = lowerBound(xs, l1);
+            int hi = upperBound(xs, r1);
+            int vl = lowerBound(ys, l2) + 1;
+            int vr = upperBound(ys, r2);
+            long ans = 0;
+            if (lo < hi && vl <= vr) {
+                ans = tree.countBetween(pre[lo], pre[hi], vl, vr);
+            }
+            out.println(ans);
+        }
+    }

@@ -1,5 +1,5 @@
-# IA — cf712749F
-proveedor: claude-code · modelo: claude-sonnet-5-5 · enunciado: portapapeles, verificado: contiene «Rollback» (guardado en enunciado.md)
+# cf712749F
+motor: A
 
 ## intento 1
 

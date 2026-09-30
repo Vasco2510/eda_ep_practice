@@ -1,0 +1,9 @@
+// imports (van arriba, junto a los tuyos):
+import plantillas.PersistentLeftistHeap;
+// en main(): descomenta  t = in.nextInt();  (varios casos de prueba)
+
+    static void solve() {
+        int n = in.nextInt(); long ans = 0; PersistentLeftistHeap h = new PersistentLeftistHeap(); int v = 0;
+        for (int i = 0; i < n; i++) { long s = in.nextLong(); if (s > 0) v = h.insert(v, -s); else if (!h.isEmpty(v)) { ans -= h.minKey(v); v = h.extractMin(v); } }
+        out.println(ans);
+    }

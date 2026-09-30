@@ -32,6 +32,8 @@ bin/
 build/
 .eda_current
 tools/claves.env
-.eda_ia_session.json
+.eda_w_hilo.json
 .eda_uso.jsonl
 __pycache__/
+PRIVADO.md
+.eda_listener.log

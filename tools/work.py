@@ -1,22 +1,23 @@
 r"""
-eda work — un LLM resuelve el problema actual usando las plantillas de src/plantillas.
-(Principal: Claude Sonnet 5.5 vía Claude Code; respaldo automático: Groq.)
+eda work — resuelve tu problema actual con las plantillas de src/plantillas.
+(Motor A principal; motor B de respaldo automático. Detalle de motores: PRIVADO.md.)
 
   .\eda work                   resuelve el problema: enunciado = portapapeles (si es el de este problema);
                                al terminar deja en el portapapeles lo que va en tu W (imports + solve())
   .\eda work --aplicar         en vez de copiar, escribe la solución en tu W (respaldando lo que tenías)
-  .\eda work --completo        deja en el portapapeles Main_ia.java completo (sin pasar por tu W)
-  .\eda go                     TODO: work + aplicar a tu W + probar + copiar Main.java para Codeforces
+  .\eda work --completo        deja en el portapapeles Main_w.java completo (sin pasar por tu W)
+  .\eda go                     resuelve tu problema y entrégalo: work + aplicar a tu W + probar + copiar Main.java
+  .\eda resp                  corrige tu solución con la respuesta del juez que copiaste (work --error + aplicar)
   .\eda work --usar PersistentLeftistHeap[,Otra]   obliga a usar esas plantillas
   .\eda work --clip [--forzar] exige el portapapeles (falla si no parece el enunciado de este problema)
-  .\eda work --proveedor groq|claude-code|anthropic|ollama --modelo <id> --effort <nivel> --intentos 4
-  .\eda work --nueva-sesion    Claude Code: abre una conversación nueva (por defecto continúa la anterior)
+  .\eda work --proveedor <motor> --modelo <versión> --effort <nivel> --intentos 4
+  .\eda work --nueva-sesion    abre un hilo nuevo (por defecto continúa el anterior)
   .\eda work --ping            prueba la conexión con una solicitud mínima (no necesita problema)
-  .\eda work --desde <carpeta> (pruebas) respuestas desde respuesta1.md, respuesta2.md…, sin gastar tokens
+  .\eda work --desde <carpeta> (pruebas) respuestas desde respuesta1.md, respuesta2.md…, sin gastar cupo
 (--solve y --copy siguen funcionando: son lo mismo que el modo por defecto y --completo.)
 
 Enunciado, en este orden: portapapeles · enunciado.md/.txt/.pdf en src/problemas/<slug>/ · la URL del problema.
-Salida: entrega/<slug>/Main_ia.java, entrega/<slug>/ia/JSolution.java (el W de la IA), ia/solve.java.txt y ia/log.md.
+Salida: entrega/<slug>/Main_w.java, entrega/<slug>/w/JSolution.java (el W del work), w/solve.java.txt y w/log.md.
 """
 import base64
 import html
@@ -35,14 +36,14 @@ import eda as E
 from eda import c
 
 DEFAULTS = {
-    "ia_proveedor": "claude-code",   # principal: tu plan de Claude
-    "ia_respaldo": "groq",           # si el principal falla (sin sesión, límite de uso, error): None para desactivar
-    "ia_modelo": None,               # None = el de MODELOS según proveedor
-    "ia_effort": None,               # None = el de EFFORT según proveedor
-    "ia_intentos": 4,
-    "ia_max_problemas_sesion": 8,    # claude-code: cada cuántos problemas se abre una sesión nueva
-    "groq_tpm": 8000,       # tokens por minuto del plan gratis de Groq para el modelo (ver console.groq.com)
-    "ollama_url": "http://localhost:11434",
+    "w_motor": "claude-code",   # motor principal
+    "w_respaldo": "groq",           # motor de respaldo si el principal falla (sin sesión, límite, error): None para desactivar
+    "w_version": None,               # None = la de MODELOS según motor
+    "w_esfuerzo": None,               # None = el de EFFORT según motor
+    "w_intentos": 4,
+    "w_max_problemas_hilo": 8,    # motor A: cada cuántos problemas se abre un hilo nuevo
+    "respaldo_upm": 8000,       # unidades por minuto que admite el motor de respaldo (ver PRIVADO.md)
+    "d_url": "http://localhost:11434",
 }
 MODELOS = {
     "groq": "openai/gpt-oss-120b",
@@ -51,14 +52,20 @@ MODELOS = {
     "ollama": "qwen2.5-coder:14b",
     "archivo": "",
 }
-EFFORT = {"groq": "medium", "anthropic": "high", "claude-code": "high"}  # groq: reasoning_effort de gpt-oss (low|medium|high)
+EFFORT = {"groq": "medium", "anthropic": "high", "claude-code": "high"}  # motor B: nivel de esfuerzo (low|medium|high)
 PDF_NATIVO = {"anthropic", "claude-code"}           # los demás reciben el PDF convertido a texto
-CONTEXTO_COMPLETO = {"anthropic", "claude-code"}    # manual completo de plantillas; los demás, uno compacto
+CONTEXTO_COMPLETO = {"anthropic", "claude-code"}    # guía completa de plantillas; los demás, una compacta
+
+
+LETRAS = {"A": "claude-code", "B": "groq", "C": "anthropic", "D": "ollama"}   # --proveedor A, w_motor "A", …
 
 
 def cfg():
     d = dict(DEFAULTS)
     d.update({k: v for k, v in E.config().items() if k in DEFAULTS})
+    for k in ("w_motor", "w_respaldo"):
+        if d[k]:
+            d[k] = LETRAS.get(str(d[k]).upper(), d[k])
     return d
 
 
@@ -78,7 +85,12 @@ def load_secret(name: str) -> str:
     return ""
 
 
-def est_tokens(text: str) -> int:
+def mot(n):
+    """Nombre corto del motor para los mensajes."""
+    return {"claude-code": "A", "groq": "B", "anthropic": "C", "ollama": "D", "archivo": "sim"}.get(n, n)
+
+
+def est_unid(text: str) -> int:
     return int(len(text) / 3.2) + 1
 
 
@@ -120,7 +132,7 @@ def pdf_text(pdf: Path) -> str:
     try:
         from pypdf import PdfReader
     except ImportError:
-        raise SystemExit(c("✗ para leer el PDF con este proveedor: pip install pypdf  (o usa --clip)", "red"))
+        raise SystemExit(c("✗ para leer el PDF con este motor: pip install pypdf  (o usa --clip)", "red"))
     text = "\n".join((p.extract_text() or "") for p in PdfReader(str(pdf)).pages)
     return re.sub(r"[ \t]+\n", "\n", text).strip()
 
@@ -190,7 +202,7 @@ def gather_statement(slug, clip="auto", forzar=False):
 
 
 # ---------------------------------------------------------------------------
-# Prompt
+# Encargo
 # ---------------------------------------------------------------------------
 
 RULES = """Eres un experto en programación competitiva que resuelve problemas de Codeforces en Java 21 \
@@ -233,7 +245,7 @@ def _doc_before(src_lines, i):
 
 def template_api(name, detailed):
     """Manual de una plantilla: qué es, ejemplo de uso y cada método público con su descripción.
-    detailed=False deja solo la primera línea de la descripción y las firmas (para límites de tokens ajustados)."""
+    detailed=False deja solo la primera línea de la descripción y las firmas (para límites de unidades ajustados)."""
     src = (E.PLANTILLAS / f"{name}.java").read_text(encoding="utf-8")
     cls = re.search(r"^public\s+(?:final\s+)?class\s+(\w+(?:<[^>]*>)?)", src, re.M)
     doc = re.search(r"/\*\*(.*?)\*/\s*\npublic", src, re.S)
@@ -252,14 +264,14 @@ def template_api(name, detailed):
 
 
 def build_system(full: bool, detailed=()) -> str:
-    """full=True: manual completo de todas las plantillas (para Claude). Nunca se envía el código fuente."""
+    """full=True: guía completa de todas las plantillas. Nunca se envía el código fuente."""
     body = "```java\n" + "\n\n".join(template_api(n, full or n in detailed) for n in E.template_names()
                                       if n != "FastScanner") + "\n```"
     return RULES + "\n\nPlantillas disponibles (paquete `plantillas`). Manual: qué hace cada una, cuándo usarla, " \
                    "y cada método con lo que recibe y devuelve:\n\n" + body
 
 
-def build_first_message(slug, statement, stmt_source, forced, full):
+def build_first_message(slug, statement, stmt_source, forced, full, con_w=True):
     meta = E.problem_meta(slug)
     tests = []
     for tin in sorted((E.PROBLEMAS / slug / "tests").glob("sample*.in"))[:3 if full else 2]:
@@ -277,11 +289,73 @@ def build_first_message(slug, statement, stmt_source, forced, full):
         f"Enunciado (fuente: {stmt_source}):\n" + (statement if statement else "(adjunto en el PDF)"),
         "Ejemplos:\n" + ("\n\n".join(tests) if tests else "(no hay)"),
     ]
-    if full:
+    if full and con_w:
         w = E.w_path(slug).read_text(encoding="utf-8")
         parts.append(f"Plantilla actual de W (src/problemas/{slug}/JSolution.java):\n```java\n{w}\n```")
     if forced:
         parts.append("OBLIGATORIO: la solución debe usar estas plantillas: " + ", ".join(forced) + ".")
+    return "\n\n".join(parts)
+
+
+_ENUNCIADO_RE = re.compile(r"(?i)time limit per test|l[ií]mite de tiempo por test")
+_VEREDICTO_RE = re.compile(r"(?i)verdict|judgement protocol|\bTest:\s*#|veredicto")
+
+
+def read_feedback(nota=""):
+    """La respuesta del juez, tal como la copiaste (Ctrl+A, Ctrl+C en el resultado del envío)."""
+    fb = read_clipboard().strip()
+    if len(fb) < 8:
+        raise SystemExit(c("✗ no hay respuesta del juez en el portapapeles: copia el resultado del envío "
+                           "(Ctrl+A, Ctrl+C) y repite", "red"))
+    if _ENUNCIADO_RE.search(fb) and not _VEREDICTO_RE.search(fb):
+        raise SystemExit(c("✗ el portapapeles parece el enunciado, no la respuesta del juez: copia el resultado "
+                           "del envío (Ctrl+A, Ctrl+C) y repite", "red"))
+    return fb
+
+
+def judge_case(fb):
+    """(entrada, respuesta_correcta | None) del caso que falló, si el veredicto copiado los trae."""
+    heads = list(re.finditer(r"(?im)^[ \t]*(Input|Output|Answer|Checker Log|Entrada|Salida|Respuesta)[ \t]*:?[ \t]*$", fb))
+    secs = {}
+    for k, m in enumerate(heads):
+        end = heads[k + 1].start() if k + 1 < len(heads) else len(fb)
+        body = re.sub(r"(?m)^[ \t]*```\w*[ \t]*$", "", fb[m.end():end])
+        body = "\n".join(l for l in body.split("\n") if l.strip() != "Copy").strip("\n")
+        secs.setdefault(m.group(1).lower(), body + "\n" if body.strip() else "")
+    return (secs.get("input") or secs.get("entrada") or None), (secs.get("answer") or secs.get("respuesta") or None)
+
+
+def add_judge_case(slug, fb):
+    """Si el veredicto trae entrada y respuesta correcta, queda como test local (juezN) para validar la corrección."""
+    inp, ans = judge_case(fb)
+    if not inp or not ans:
+        return None
+    d = E.PROBLEMAS / slug / "tests"
+    if any(f.read_text(encoding="utf-8").split() == inp.split() for f in d.glob("*.in")):
+        return None
+    n = len(list(d.glob("juez*.in"))) + 1
+    (d / f"juez{n}.in").write_text(inp, encoding="utf-8")
+    (d / f"juez{n}.out").write_text(ans, encoding="utf-8")
+    return f"juez{n}"
+
+
+def build_fix_message(slug, statement, stmt_source, forced, full, fb, nota, w_code):
+    base = build_first_message(slug, statement, stmt_source, forced, full, con_w=False)
+    lim_fb, lim_code = (8000, 30000) if full else (2500, 6000)
+    if len(fb) > lim_fb:
+        fb = fb[:lim_fb] + "\n… (recortado)"
+    if len(w_code) > lim_code:
+        w_code = w_code[:lim_code] + "\n… (recortado)"
+    parts = [base,
+             f"La solución enviada (src/problemas/{slug}/JSolution.java) fue RECHAZADA por el juez de Codeforces.",
+             f"Respuesta del juez:\n```\n{fb}\n```"]
+    if nota:
+        parts.append("Nota del usuario: " + nota)
+    parts += [f"Solución enviada:\n```java\n{w_code}\n```",
+              "Encuentra la causa REAL comparando la respuesta del juez con lo que hace el código y con el enunciado "
+              "(formato de entrada, límites, casos borde, complejidad, memoria, recursión profunda). Comprueba también "
+              "que el código corresponda a ESTE problema y a su formato de entrada. Responde con la causa (breve) y el "
+              "archivo JSolution.java COMPLETO corregido en un bloque ```java."]
     return "\n\n".join(parts)
 
 
@@ -344,18 +418,18 @@ def normalize(code, slug):
 
 
 # ---------------------------------------------------------------------------
-# Proveedores: send(system, texto, pdf=None) -> texto de la respuesta. Cada uno guarda su historial.
+# Motores: send(system, texto, pdf=None) -> texto de la respuesta. Cada uno guarda su historial.
 # ---------------------------------------------------------------------------
 
-class GroqProvider:
-    """Groq (plan gratis): API compatible con OpenAI. Credencial: GROQ_API_KEY.
-    El plan gratis limita tokens por minuto, así que se reenvía solo lo necesario en cada intento."""
+class MotorB:
+    """Motor B (respaldo, sin costo). Credencial: variable del motor B (ver PRIVADO.md).
+    Admite pocas unidades por minuto, así que se reenvía solo lo necesario en cada intento."""
     URL = os.environ.get("EDA_GROQ_URL", "https://api.groq.com/openai/v1/chat/completions")  # override solo para pruebas
 
     def __init__(self, model, effort, tpm):
         self.key = os.environ.get("GROQ_API_KEY", "").strip()
         if not self.key:
-            raise SystemExit(c("✗ falta GROQ_API_KEY (créala gratis en console.groq.com; ver TUTORIAL.md)", "red"))
+            raise SystemExit(c("✗ falta la clave del motor B (ver PRIVADO.md)", "red"))
         self.model, self.effort, self.tpm = model, effort, tpm
         self.first = None
         self.last_code = None
@@ -369,15 +443,15 @@ class GroqProvider:
                     {"role": "assistant", "content": f"```java\n{self.last_code or '(sin código)'}\n```"},
                     {"role": "user", "content": text}]
         msgs.insert(0, {"role": "system", "content": system})
-        prompt_tokens = sum(est_tokens(m["content"]) for m in msgs)
-        max_out = self.tpm - prompt_tokens - 300
+        enc_unid = sum(est_unid(m["content"]) for m in msgs)
+        max_out = self.tpm - enc_unid - 300
         if max_out < 1500:
-            raise SystemExit(c(f"✗ el prompt (~{prompt_tokens} tokens) no entra en el límite de {self.tpm} tokens/min "
-                               f"de Groq. Acorta enunciado.md o sube 'groq_tpm' si tu plan lo permite.", "red"))
+            raise SystemExit(c(f"✗ el encargo (~{enc_unid} unidades) no entra en el límite de {self.tpm} unidades/min "
+                               f"del motor B. Acorta enunciado.md o sube 'respaldo_upm' si tu cupo lo permite.", "red"))
         body = {"model": self.model, "messages": msgs, "max_completion_tokens": min(max_out, 32000)}
         if self.model.startswith("openai/gpt-oss") and self.effort:
             body["reasoning_effort"] = self.effort
-        print(c(f"  [groq · {self.model} · prompt ~{prompt_tokens} tokens · salida máx {body['max_completion_tokens']}]",
+        print(c(f"  [B · encargo ~{enc_unid} unidades · salida máx {body['max_completion_tokens']}]",
                 "gray"))
         data = self._post(body)
         choice = data["choices"][0]
@@ -385,10 +459,10 @@ class GroqProvider:
         u = data.get("usage", {})
         self.last_usage = {"in": u.get("prompt_tokens") or 0, "cache": 0, "out": u.get("completion_tokens") or 0, "usd": 0}
         print(c(reply, "gray"))
-        print(c(f"  [tokens: entrada {u.get('prompt_tokens')}, salida {u.get('completion_tokens')}; "
+        print(c(f"  [unidades: entrada {u.get('prompt_tokens')}, salida {u.get('completion_tokens')}; "
                 f"fin={choice.get('finish_reason')}]", "gray"))
         if choice.get("finish_reason") == "length":
-            print(c("  ⚠ la respuesta se cortó por el límite de tokens (prueba --effort low)", "yellow"))
+            print(c("  ⚠ la respuesta se cortó por el límite de unidades (prueba --effort low)", "yellow"))
         code = extract_java(reply)
         if code:
             self.last_code = code
@@ -409,31 +483,31 @@ class GroqProvider:
                     wait = float(e.headers.get("retry-after") or 0) or \
                         ((int(m.group(1) or 0) * 60 + float(m.group(2))) if m else 20)
                     if wait > 120:
-                        raise SystemExit(c(f"✗ Groq: límite diario alcanzado (reintentar en {wait / 60:.0f} min).\n{err}", "red"))
-                    print(c(f"  … límite por minuto de Groq, espero {wait:.0f} s", "yellow"))
+                        raise SystemExit(c(f"✗ motor B: límite diario alcanzado (reintentar en {wait / 60:.0f} min).\n{err}", "red"))
+                    print(c(f"  … límite por minuto del motor B, espero {wait:.0f} s", "yellow"))
                     time.sleep(wait + 1)
                     continue
                 if e.code == 401:
-                    raise SystemExit(c("✗ GROQ_API_KEY inválida", "red"))
+                    raise SystemExit(c("✗ clave del motor B inválida", "red"))
                 if e.code == 413 or "too large" in err.lower():
-                    raise SystemExit(c(f"✗ Groq: solicitud demasiado grande para tu límite.\n{err}", "red"))
+                    raise SystemExit(c(f"✗ motor B: solicitud demasiado grande para tu límite.\n{err}", "red"))
                 if e.code == 404 or "model_not_found" in err or "decommissioned" in err:
-                    raise SystemExit(c(f"✗ Groq: el modelo {self.model} no existe o fue retirado. "
-                                       f"Mira console.groq.com/docs/models y usa --modelo <id>.\n{err}", "red"))
-                raise SystemExit(c(f"✗ Groq respondió {e.code}:\n{err[-2000:]}", "red"))
+                    raise SystemExit(c(f"✗ motor B: la versión {self.model} no existe o fue retirada. "
+                                       f"Elige otra con --modelo <versión> (ver PRIVADO.md).\n{err}", "red"))
+                raise SystemExit(c(f"✗ motor B respondió {e.code}:\n{err[-2000:]}", "red"))
             except urllib.error.URLError as e:
-                raise SystemExit(c(f"✗ sin conexión con api.groq.com: {e.reason}", "red"))
-        raise SystemExit(c("✗ Groq siguió limitando después de varios reintentos", "red"))
+                raise SystemExit(c(f"✗ sin conexión con el motor B: {e.reason}", "red"))
+        raise SystemExit(c("✗ motor B siguió limitando después de varios reintentos", "red"))
 
 
-class AnthropicProvider:
-    """API de Claude con el SDK oficial (pip install anthropic). Credencial: ANTHROPIC_API_KEY. De pago."""
+class MotorC:
+    """Motor C (API directa, de pago). Credencial: variable del motor C (ver PRIVADO.md)."""
 
     def __init__(self, model, effort):
         try:
             import anthropic
         except ImportError:
-            raise SystemExit(c("✗ falta el SDK: pip install anthropic", "red"))
+            raise SystemExit(c("✗ falta el SDK del motor C (ver PRIVADO.md)", "red"))
         self.anthropic = anthropic
         self.client = anthropic.Anthropic()
         self.model, self.effort = model, effort
@@ -441,7 +515,7 @@ class AnthropicProvider:
         self.messages = []
 
     def send(self, system, text, pdf=None):
-        if self.system is None:  # fijo durante la conversación (va con caché)
+        if self.system is None:  # fijo durante el hilo (va con caché)
             self.system = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         content = []
         if pdf:
@@ -466,33 +540,33 @@ class AnthropicProvider:
                 msg = stream.get_final_message()
             print()
         except A.AuthenticationError:
-            raise SystemExit(c("✗ API key inválida o ausente. Define ANTHROPIC_API_KEY (ver TUTORIAL.md)", "red"))
+            raise SystemExit(c("✗ clave del motor C inválida o ausente (ver PRIVADO.md)", "red"))
         except A.PermissionDeniedError as e:
             raise SystemExit(c(f"✗ la API key no tiene permiso: {e.message}", "red"))
         except A.NotFoundError:
-            raise SystemExit(c(f"✗ modelo no encontrado: {self.model}", "red"))
+            raise SystemExit(c(f"✗ versión no encontrada: {self.model}", "red"))
         except A.RateLimitError:
             raise SystemExit(c("✗ límite de uso alcanzado (rate limit / saldo). Espera o revisa tu cuenta.", "red"))
         except A.APIStatusError as e:
             raise SystemExit(c(f"✗ error de la API ({e.status_code}): {e.message}", "red"))
         except A.APIConnectionError:
-            raise SystemExit(c("✗ sin conexión con api.anthropic.com", "red"))
+            raise SystemExit(c("✗ sin conexión con el motor C", "red"))
         except TypeError as e:  # el SDK no encontró ninguna credencial
             if "authentication" not in str(e):
                 raise
-            raise SystemExit(c("✗ no hay credenciales de Claude: define ANTHROPIC_API_KEY (ver TUTORIAL.md)", "red"))
+            raise SystemExit(c("✗ no hay credenciales del motor C (ver PRIVADO.md)", "red"))
         if msg.stop_reason == "refusal":
-            raise SystemExit(c("✗ el modelo rechazó la solicitud", "red"))
+            raise SystemExit(c("✗ el motor rechazó la solicitud", "red"))
         self.messages.append({"role": "assistant", "content": msg.content})
         u = msg.usage
         self.last_usage = {"in": u.input_tokens or 0, "cache": u.cache_read_input_tokens or 0,
                            "out": u.output_tokens or 0, "usd": 0}
-        print(c(f"  [tokens: entrada {u.input_tokens} (+{u.cache_read_input_tokens or 0} de caché), "
+        print(c(f"  [unidades: entrada {u.input_tokens} (+{u.cache_read_input_tokens or 0} de caché), "
                 f"salida {u.output_tokens}; stop={msg.stop_reason}]", "gray"))
         return "".join(b.text for b in msg.content if b.type == "text")
 
 
-def find_claude():
+def buscar_motor_a():
     exe = shutil.which("claude")
     if not exe:  # el instalador nativo lo deja aquí; puede no estar en el PATH de una terminal ya abierta
         p = Path.home() / ".local" / "bin" / ("claude.exe" if os.name == "nt" else "claude")
@@ -500,25 +574,22 @@ def find_claude():
     return exe
 
 
-class ClaudeCodeProvider:
-    """Claude Code en modo no interactivo (`claude -p`): usa tu cuenta/plan de Claude, sin API key.
+class MotorA:
+    """Motor A (principal): usa tu cupo, sin clave.
 
-    Sesión continua, como un chat: los reintentos de un problema la continúan (--resume) y el SIGUIENTE
-    problema también, así el manual de plantillas queda en caché y la IA ya conoce el contexto. Se abre
-    una sesión nueva si cambian las plantillas/modelo, cada `max_problemas` problemas, o con --nueva-sesion."""
+    Hilo continuo: los reintentos de un problema lo continúan y el SIGUIENTE
+    problema también, así la guía de plantillas queda en caché y el contexto ya está. Se abre
+    un hilo nuevo si cambian las plantillas/versión, cada `max_problemas` problemas, o con --nueva-sesion."""
 
     def __init__(self, model, effort, max_problemas=8, fresh=False):
-        exe = find_claude()
+        exe = buscar_motor_a()
         if not exe:
-            raise SystemExit(c("✗ no encuentro Claude Code. Instálalo en PowerShell con:\n"
-                               "    irm https://claude.ai/install.ps1 | iex\n"
-                               "  y luego corre `claude` una vez para iniciar sesión (ver TUTORIAL.md)", "red"))
+            raise SystemExit(c("✗ no encuentro el motor A (instalación y sesión: ver PRIVADO.md)", "red"))
         st = subprocess.run([exe, "auth", "status"], capture_output=True, text=True, encoding="utf-8", errors="replace")
         if st.returncode != 0:
-            raise SystemExit(c("✗ Claude Code está instalado pero no has iniciado sesión: corre `claude` "
-                               "(o `claude auth login`) y entra con tu cuenta de claude.ai", "red"))
+            raise SystemExit(c("✗ el motor A está instalado pero sin sesión iniciada (ver PRIVADO.md)", "red"))
         # --tools Read: solo puede leer archivos (el PDF); --max-turns evita que se quede dando vueltas.
-        # --strict-mcp-config sin --mcp-config: no carga conectores MCP (sus definiciones gastan tokens).
+        # --strict-mcp-config sin --mcp-config: no carga conectores MCP (sus definiciones gastan unidades).
         self.base = [exe, "-p", "--output-format", "json", "--tools", "Read", "--max-turns", "8",
                      "--strict-mcp-config"]
         if model:
@@ -528,11 +599,11 @@ class ClaudeCodeProvider:
         self.model, self.effort = model, effort
         self.max_problemas, self.fresh = max_problemas, fresh
         self.persist = True                       # el ping lo desactiva para no pisar la sesión de trabajo
-        self.state_file = E.ROOT / ".eda_ia_session.json"
+        self.state_file = E.ROOT / ".eda_w_hilo.json"
         self.session = None
         self.resumed = False                      # ¿este problema continúa una sesión anterior?
         self.first_send = True
-        self.sys_file = E.BUILD / "ia_system_prompt.md"
+        self.sys_file = E.BUILD / "w_encargo.md"
 
     def _load_state(self):
         try:
@@ -561,13 +632,13 @@ class ClaudeCodeProvider:
             self.session, self.resumed = state["session"], True
         if pdf:
             text = f"El enunciado está en el PDF {pdf} (léelo con la herramienta Read).\n\n" + text
-        if self.resumed and self.first_send:
+        if self.resumed and self.first_send and getattr(self, "nuevo_problema", True):
             text = ("NUEVO PROBLEMA (seguimos en la misma sesión: mismas reglas, mismo manual de plantillas, "
                     "mismo formato de respuesta).\n\n" + text)
 
         def fresh_cmd():
-            # REEMPLAZA el prompt de sistema de Claude Code (agente de programación + herramientas, muy largo)
-            # por el nuestro: gasta mucho menos del plan. Va en archivo porque no cabe en la línea de
+            # REEMPLAZA el encargo de sistema por defecto (muy largo)
+            # por el nuestro: gasta mucho menos cupo. Va en archivo porque no cabe en la línea de
             # comandos de Windows.
             self.sys_file.parent.mkdir(parents=True, exist_ok=True)
             self.sys_file.write_text(system + "\n\nSi el enunciado viene en un PDF, léelo con la herramienta Read.",
@@ -583,7 +654,7 @@ class ClaudeCodeProvider:
         if not self.session:
             data, err = self._call(fresh_cmd(), text)
         if data is None:
-            raise SystemExit(c(f"✗ Claude Code falló (¿iniciaste sesión con `claude`? ¿límite de uso de tu plan?):\n{err}", "red"))
+            raise SystemExit(c(f"✗ motor A falló (¿sesión iniciada? ¿límite de uso de tu cupo?):\n{err}", "red"))
         self.session = data.get("session_id") or self.session
         if self.persist:
             n = state.get("problemas", 0) if self.resumed else 0
@@ -602,14 +673,14 @@ class ClaudeCodeProvider:
                            "usd": cost or 0}
         toks = (f"entrada {u.get('input_tokens', 0) + u.get('cache_creation_input_tokens', 0)}"
                 f" (+{u.get('cache_read_input_tokens', 0)} de caché), salida {u.get('output_tokens', 0)}") if u else ""
-        print(c(f"  [claude code · {data.get('num_turns', '?')} turnos · tokens: {toks}"
-                + (f" · consumo de tu plan equivalente a ${cost:.3f} de API (no se cobra aparte)" if cost else "")
+        print(c(f"  [A · {data.get('num_turns', '?')} turnos · unidades: {toks}"
+                + (f" · equivale a ${cost:.3f} (no se cobra aparte)" if cost else "")
                 + "]", "gray"))
         return reply
 
 
-class OllamaProvider:
-    """Modelo local con Ollama (https://ollama.com)."""
+class MotorD:
+    """Motor D (local)."""
 
     def __init__(self, model, url):
         self.model, self.url = model, url.rstrip("/")
@@ -624,16 +695,16 @@ class OllamaProvider:
         try:
             data = json.loads(urllib.request.urlopen(req, timeout=1800).read())
         except Exception as e:
-            raise SystemExit(c(f"✗ no pude hablar con Ollama en {self.url}: {e}", "red"))
+            raise SystemExit(c(f"✗ no pude hablar con el motor D en {self.url}: {e}", "red"))
         reply = data["message"]["content"]
         self.messages.append({"role": "assistant", "content": reply})
         print(c(reply, "gray"))
         return reply
 
 
-class FileProvider:
-    """Para probar el ciclo sin gastar tokens: responde con <carpeta>/respuesta1.md, respuesta2.md, …
-    y guarda en prompt<N>.md lo que se habría enviado (system + mensaje)."""
+class MotorSim:
+    """Para probar el ciclo sin gastar cupo: responde con <carpeta>/respuesta1.md, respuesta2.md, …
+    y guarda en encargo<N>.md lo que se habría enviado (system + mensaje)."""
 
     def __init__(self, folder):
         self.folder, self.n = Path(folder), 0
@@ -643,8 +714,8 @@ class FileProvider:
         f = self.folder / f"respuesta{self.n}.md"
         if not f.exists():
             raise SystemExit(c(f"✗ no hay {f}", "red"))
-        sent = f"=== SYSTEM (~{est_tokens(system)} tokens) ===\n{system}\n\n=== MENSAJE (~{est_tokens(text)} tokens) ===\n{text}"
-        (self.folder / f"prompt{self.n}.md").write_text(sent, encoding="utf-8")
+        sent = f"=== SYSTEM (~{est_unid(system)} unidades) ===\n{system}\n\n=== MENSAJE (~{est_unid(text)} unidades) ===\n{text}"
+        (self.folder / f"encargo{self.n}.md").write_text(sent, encoding="utf-8")
         return f.read_text(encoding="utf-8")
 
 
@@ -654,13 +725,13 @@ class FileProvider:
 
 def parse_args(argv):
     opts = {"slug": None, "clip": False, "usar": [], "copy": False, "solve": False, "ping": False,
-            "aplicar": False, "completo": False, "forzar": False, "uso": False}
+            "aplicar": False, "completo": False, "forzar": False, "uso": False, "error": False, "nota": ""}
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in ("--clip", "--copy", "--solve", "--ping", "--nueva-sesion", "--aplicar", "--completo", "--forzar", "--uso"):
+        if a in ("--clip", "--copy", "--solve", "--ping", "--nueva-sesion", "--aplicar", "--completo", "--forzar", "--uso", "--error"):
             opts[a[2:]] = True
-        elif a in ("--usar", "--proveedor", "--modelo", "--intentos", "--desde", "--effort", "--como"):
+        elif a in ("--usar", "--proveedor", "--modelo", "--intentos", "--desde", "--effort", "--como", "--nota"):
             if i + 1 >= len(argv):
                 raise SystemExit(f"falta el valor de {a}")
             opts[a[2:]] = argv[i + 1]
@@ -672,10 +743,13 @@ def parse_args(argv):
         i += 1
     if isinstance(opts["usar"], str):
         opts["usar"] = [u.strip() for u in opts["usar"].split(",") if u.strip()]
+    for k in ("proveedor", "como"):  # letras de motor: A, B, C, D
+        if k in opts:
+            opts[k] = LETRAS.get(str(opts[k]).upper(), opts[k])
     return opts
 
 
-USO_FILE = E.ROOT / ".eda_uso.jsonl"   # una línea por llamada al modelo (no se sube a git)
+USO_FILE = E.ROOT / ".eda_uso.jsonl"   # una línea por llamada (no se sube a git)
 
 
 def registrar_uso(slug, proveedor, modelo, intento, usage):
@@ -688,9 +762,9 @@ def registrar_uso(slug, proveedor, modelo, intento, usage):
 
 
 def plan_usage():
-    """Consulta a Claude Code (`claude -p "/usage"`) cuánto llevas usado de tu plan.
+    """Consulta cuánto llevas usado de tu cupo (vía el motor A).
     Devuelve dict con session/week (% usado y cuándo se reinicia) y el texto completo; None si no se pudo."""
-    exe = find_claude()
+    exe = buscar_motor_a()
     if not exe:
         return None
     try:
@@ -712,9 +786,9 @@ def _fmt(n):
 
 
 def uso(argv):
-    """`eda uso`: tokens que gastó eda work en esta máquina + cuánto llevas usado de tu plan (vía Claude Code)."""
+    """`eda uso`: unidades que gastó eda work en esta máquina + cuánto llevas usado de tu cupo."""
     completo = "--completo" in argv
-    print(c("▶ Consumo de eda work (esta máquina)", "bold"))
+    print(c("> Consumo de eda work (esta máquina)", "bold"))
     recs = []
     if USO_FILE.exists():
         for line in USO_FILE.read_text(encoding="utf-8").splitlines():
@@ -732,17 +806,17 @@ def uso(argv):
                     sum(r.get("out", 0) for r in rs), sum(r.get("usd", 0) for r in rs))
         n, i, ca, o, usd = suma([r for r in recs if r["t"].startswith(hoy)])
         print(f"  hoy:     {n} llamadas · entrada {_fmt(i)} (+{_fmt(ca)} de caché) · salida {_fmt(o)}"
-              + (f" · ≈ ${usd:.2f} de API equivalente" if usd else ""))
+              + (f" · ≈ ${usd:.2f} equivalente" if usd else ""))
         last = recs[-1]["slug"]
         ult = [r for r in recs if r["slug"] == last][-8:]
         n, i, ca, o, usd = suma(ult)
         print(f"  último:  {last} ({ult[-1]['proveedor']}) · {n} llamadas · entrada {_fmt(i)} (+{_fmt(ca)} de caché)"
-              f" · salida {_fmt(o)}" + (f" · ≈ ${usd:.3f} de API equivalente" if usd else ""))
-        print(c("  (\"≈ $\" es lo que costaría con API de pago; con tu plan no se cobra: solo gasta de tus límites)", "gray"))
-    print(c("\n▶ Tu plan de Claude (según `claude -p \"/usage\"`)", "bold"))
+              f" · salida {_fmt(o)}" + (f" · ≈ ${usd:.3f} equivalente" if usd else ""))
+        print(c("  (\"≈ $\" es un equivalente de referencia; con tu cupo no se cobra: solo gasta de tus límites)", "gray"))
+    print(c("\n> Tu cupo (según el motor A)", "bold"))
     pu = plan_usage()
     if not pu:
-        print(c("  no pude consultarlo: ¿Claude Code instalado y con sesión? (`claude auth status --text`)", "yellow"))
+        print(c("  no pude consultarlo: ¿motor A instalado y con sesión? (ver PRIVADO.md)", "yellow"))
         return 1
     if "session" in pu:
         pct, reset = pu["session"]
@@ -750,18 +824,18 @@ def uso(argv):
     if "week" in pu:
         pct, reset = pu["week"]
         print(f"  Semana:         {pct}% usado → te queda ≈ {100 - pct}%   (se reinicia {reset})")
-    print(c("  Es el total de tu cuenta (claude.ai + Claude Code + esta y otras conversaciones), no solo eda work.", "gray"))
+    print(c("  Es el total de tu cuenta (todo lo que uses), no solo eda work.", "gray"))
     if completo:
         print("\n" + pu["texto"])
     return 0
 
 
 def resumen_uso(tot, antes, o):
-    """Cierre de work/go: tokens gastados en esta resolución y (con --uso) cuánto bajó tu plan."""
+    """Cierre de work/go: unidades gastadas en esta resolución y (con --uso) cuánto bajó tu cupo."""
     if not (tot["in"] or tot["out"]):
         return
-    print(c(f"\n  consumo de esta resolución: entrada {_fmt(tot['in'])} (+{_fmt(tot['cache'])} de caché), "
-            f"salida {_fmt(tot['out'])}" + (f" ≈ ${tot['usd']:.3f} de API equivalente" if tot["usd"] else ""), "gray"))
+    print(c(f"\n  gasto de esta resolución: entrada {_fmt(tot['in'])} (+{_fmt(tot['cache'])} de caché), "
+            f"salida {_fmt(tot['out'])}" + (f" ≈ ${tot['usd']:.3f} equivalente" if tot["usd"] else ""), "gray"))
     if antes is not None:
         despues = plan_usage()
         if despues and "session" in antes and "session" in despues:
@@ -778,7 +852,7 @@ def w_is_empty(text: str) -> bool:
 
 
 def apply_to_w(slug, code):
-    """Escribe la solución de la IA en tu W. Si tu W tenía código, lo guarda antes en un respaldo .txt."""
+    """Escribe la solución en tu W. Si tu W tenía código, lo guarda antes en un respaldo .txt."""
     w = E.w_path(slug)
     cur = w.read_text(encoding="utf-8")
     backup = None
@@ -789,7 +863,7 @@ def apply_to_w(slug, code):
     return backup
 
 
-def entregar(slug, code, f_ia, ia_dir, snippet, o):
+def entregar(slug, code, f_gen, wdir, snippet, o):
     """Qué pasa con la solución que ya pasó los tests: según el modo pedido."""
     if o["aplicar"]:
         backup = apply_to_w(slug, code)
@@ -797,16 +871,16 @@ def entregar(slug, code, f_ia, ia_dir, snippet, o):
         if backup:
             print(f"  (tu W anterior quedó en {backup.relative_to(E.ROOT)})")
     elif o["completo"] or o["copy"]:
-        E.copy_to_clipboard(f_ia)
-        print("  portapapeles: Main_ia.java completo → pégalo en Codeforces")
+        E.copy_to_clipboard(f_gen)
+        print("  listo en portapapeles: Main_w.java completo")
     else:
         print(c("\n──── lo que va en tu W ────", "blue") + "\n" + snippet)
-        E.copy_to_clipboard(ia_dir / "solve.java.txt")
+        E.copy_to_clipboard(wdir / "solve.java.txt")
         print("  portapapeles: imports + solve() → pégalo en tu JSolution.java y corre  .\\eda test")
 
 
 def go(argv):
-    """Todo en un comando: work (IA) → aplica la solución a tu W → prueba tu W → copia Main.java para Codeforces."""
+    """Resuelve tu problema y entrégalo: work → aplica a tu W → prueba tu W → copia Main.java para Codeforces."""
     rc = solve(argv + ["--aplicar"])
     if rc != 0:
         return rc
@@ -814,29 +888,78 @@ def go(argv):
     print(c("\n── probando tu W con los ejemplos ──", "blue"))
     ok, _ = E.run_tests(slug)
     if not ok:
-        print(c("✗ tu W no pasa los tests (la IA ya lo había probado: revisa el archivo)", "red"))
+        print(c("tu W no pasa los tests (ya se había probado: revisa el archivo)", "red"))
         return 1
     E.copy_to_clipboard(E.render(slug, quiet=True))
     print(c(f"\n✓ LISTO: entrega/{slug}/Main.java está en el portapapeles → pégalo en Codeforces (Java 21)", "green"))
     return 0
 
 
+def resp(argv):
+    """Corrige tu solución con la respuesta del juez (portapapeles): work --error → aplica a tu W → prueba → copia Main.java."""
+    return go(argv + ["--error"])
+
+
+def marcar_fallo(slug, msg):
+    """Deja el motivo del fallo en tu W (en lugar de la línea //@work), para verlo sin mirar la terminal."""
+    w = E.w_path(slug)
+    try:
+        text = w.read_text(encoding="utf-8")
+    except OSError:
+        return
+    primera = (msg.strip().splitlines() or [""])[0].lstrip("✗ ").strip()  # solo la 1.ª línea, sin la marca ✗
+    linea = " ".join(primera.split())[:170]
+    aviso = lambda m: f"// work falló: {linea}  (detalle: entrega/{slug}/w/log.md)"  # noqa: E731
+    nuevo = E.FIX_RE.sub(aviso, text, count=1)
+    if nuevo == text:
+        nuevo = E.MARKER_RE.sub(aviso, text, count=1)
+    if nuevo != text:
+        w.write_text(nuevo, encoding="utf-8")
+
+
+def trigger(slug, args_text, fix=False):
+    """Lo que ejecuta el listener al detectar `//@work [plantillas]` en tu W: es `go` (resuelve → aplica a tu W →
+    prueba → copia Main.java). Devuelve (ok, mensaje corto). No lanza excepciones."""
+    argv = [slug]
+    if fix:  # `//Respuesta: error [nota]`: el texto que sigue es una nota para la corrección
+        argv += ["--error"] + (["--nota", args_text] if args_text else [])
+    else:
+        names = [n for n in re.split(r"[\s,;]+", args_text or "") if n]
+        if names:
+            argv += ["--usar", ",".join(names)]
+    argv += [str(x) for x in E.config().get("trigger_args", [])]
+    E.set_current(slug)
+    try:
+        if go(argv) == 0:
+            return True, (f"corregido: entrega/{slug}/Main.java está en el portapapeles y tu JSolution.java ya tiene la corrección"
+                          if fix else f"listo: entrega/{slug}/Main.java está en el portapapeles y tu JSolution.java ya tiene la solución")
+        msg = f"no salió: los tests siguen fallando (ver entrega/{slug}/w/log.md)"
+    except SystemExit as e:
+        msg = E.strip_ansi(str(e.code) if e.code not in (None, 0) else "terminó sin resultado")
+    except Exception as e:  # noqa: BLE001 — el listener no debe caerse por un error del trabajo
+        import traceback
+        traceback.print_exc()
+        msg = f"error inesperado: {e}"
+    marcar_fallo(slug, msg)
+    return False, msg
+
+
 def make_provider(name, o, conf, respaldo=False):
-    """respaldo=True: ignora --modelo/--effort/config (que eran del proveedor principal) y usa los del proveedor."""
-    modelo = MODELOS.get(name, "") if respaldo else (o.get("modelo") or conf["ia_modelo"] or MODELOS.get(name, ""))
-    effort = EFFORT.get(name) if respaldo else (o.get("effort") or conf["ia_effort"] or EFFORT.get(name))
+    """respaldo=True: ignora --modelo/--effort/config (que eran del motor principal) y usa los del motor."""
+    modelo = MODELOS.get(name, "") if respaldo else (o.get("modelo") or conf["w_version"] or MODELOS.get(name, ""))
+    effort = EFFORT.get(name) if respaldo else (o.get("effort") or conf["w_esfuerzo"] or EFFORT.get(name))
     if name == "groq":
-        return GroqProvider(modelo, effort, int(conf["groq_tpm"])), modelo
+        return MotorB(modelo, effort, int(conf["respaldo_upm"])), modelo
     if name == "anthropic":
-        return AnthropicProvider(modelo, effort), modelo
+        return MotorC(modelo, effort), modelo
     if name == "claude-code":
-        return ClaudeCodeProvider(modelo, effort, int(conf["ia_max_problemas_sesion"]),
-                                  bool(o.get("nueva-sesion"))), modelo or "(modelo de tu plan)"
+        return MotorA(modelo, effort, int(conf["w_max_problemas_hilo"]),
+                                  bool(o.get("nueva-sesion"))), modelo or "(versión de tu cupo)"
     if name == "ollama":
-        return OllamaProvider(modelo, conf["ollama_url"]), modelo
+        return MotorD(modelo, conf["d_url"]), modelo
     if name == "archivo":
-        return FileProvider(o["desde"]), o["desde"]
-    raise SystemExit(f"proveedor desconocido: {name} (groq | claude-code | anthropic | ollama)")
+        return MotorSim(o["desde"]), o["desde"]
+    raise SystemExit(f"motor desconocido: {name} (ver PRIVADO.md)")
 
 
 def solve(argv):
@@ -847,24 +970,24 @@ def solve(argv):
         if v:
             os.environ.setdefault(name, v)
     if o["ping"]:  # prueba la clave/conexión con una solicitud mínima
-        name = o.get("proveedor", conf["ia_proveedor"])
+        name = o.get("proveedor", conf["w_motor"])
         prov, modelo = make_provider(name, o, conf)
         if hasattr(prov, "persist"):
             prov.persist = False  # el ping no debe pisar la sesión de trabajo
-        print(c(f"▶ ping a {name} · {modelo}", "bold"))
+        print(c(f"> ping a motor {mot(name)}", "bold"))
         reply = prov.send("Eres un asistente. Responde en una sola palabra.", "Responde exactamente: OK")
-        print(c("✓ el proveedor respondió: " + reply.strip()[:80], "green"))
+        print(c("✓ el motor respondió: " + reply.strip()[:80], "green"))
         return 0
     slug = E.current_slug(o["slug"])
     for u in o["usar"]:
         if u not in E.template_names():
             raise SystemExit(c(f"✗ --usar {u}: no existe src/plantillas/{u}.java", "red"))
 
-    proveedor = "archivo" if o.get("desde") else o.get("proveedor", conf["ia_proveedor"])
-    respaldo = None if o.get("proveedor") or o.get("desde") else conf["ia_respaldo"]  # --proveedor explícito: sin respaldo
+    proveedor = "archivo" if o.get("desde") else o.get("proveedor", conf["w_motor"])
+    respaldo = None if o.get("proveedor") or o.get("desde") else conf["w_respaldo"]  # --proveedor explícito: sin respaldo
     if respaldo == proveedor or (respaldo and respaldo not in MODELOS):
         respaldo = None
-    # "--como groq" junto con --desde: simula el formato de prompt de ese proveedor
+    # "--como groq" junto con --desde: simula el formato del encargo de ese motor
     st = {"estilo": o.get("como", proveedor), "usando_respaldo": False}
     st["full"] = st["estilo"] in CONTEXTO_COMPLETO
 
@@ -872,10 +995,10 @@ def solve(argv):
         if not respaldo or st["usando_respaldo"]:
             return False
         if respaldo == "groq" and not os.environ.get("GROQ_API_KEY"):
-            print(c("  (no hay respaldo: falta GROQ_API_KEY; ver TUTORIAL.md)", "yellow"))
+            print(c("  (no hay respaldo: falta la clave del motor B; ver PRIVADO.md)", "yellow"))
             return False
         print(err)
-        print(c(f"↪ {proveedor} falló: sigo con el respaldo ({respaldo})", "yellow"))
+        print(c(f"↪ motor {mot(proveedor)} falló: sigo con el respaldo (motor {mot(respaldo)})", "yellow"))
         return True
 
     def cambiar_a_respaldo():
@@ -891,24 +1014,46 @@ def solve(argv):
         proveedor = respaldo
         prov, modelo = cambiar_a_respaldo()
 
-    statement, pdf, source = gather_statement(slug, True if o["clip"] else "auto", o["forzar"])
+    fix = o["error"]
+    if fix and hasattr(prov, "nuevo_problema"):
+        prov.nuevo_problema = False  # es el mismo problema: el hilo no lo anuncia como nuevo
+    statement, pdf, source = gather_statement(slug, False if fix else (True if o["clip"] else "auto"), o["forzar"])
     if pdf and st["estilo"] not in PDF_NATIVO:
         statement, source = pdf_text(pdf), f"{pdf.name} (texto extraído)"
         pdf = None
 
-    ia_dir = E.ENTREGA / slug / "ia"
-    ia_dir.mkdir(parents=True, exist_ok=True)
-    w_ia, f_ia, log = ia_dir / "JSolution.java", E.f_path(slug, ia=True), ia_dir / "log.md"
-    log.write_text(f"# IA — {slug}\nproveedor: {proveedor} · modelo: {modelo} · enunciado: {source}\n\n", encoding="utf-8")
-    intentos = int(o.get("intentos", conf["ia_intentos"]))
+    wdir = E.ENTREGA / slug / "w"
+    wdir.mkdir(parents=True, exist_ok=True)
+    w_gen, f_gen, log = wdir / "JSolution.java", E.f_path(slug, gen=True), wdir / "log.md"
+    if fix:
+        w_code = E.w_path(slug).read_text(encoding="utf-8")
+        if w_is_empty(w_code):
+            raise SystemExit(c("✗ no hay una solución previa en tu JSolution.java para corregir", "red"))
+        fb = read_feedback()
+        nuevo_caso = add_judge_case(slug, fb)
+        with (wdir / "respuesta_juez.md").open("a", encoding="utf-8") as f:
+            f.write(f"## {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n```\n{fb}\n```\n\n")
+        with log.open("a", encoding="utf-8") as f:
+            f.write(f"\n---\n# corrección {time.strftime('%H:%M:%S')}\nmotor: {mot(proveedor)}\n\n")
+    else:
+        log.write_text(f"# {slug}\nmotor: {mot(proveedor)} · enunciado: {source}\n\n", encoding="utf-8")
+    intentos = int(o.get("intentos", conf["w_intentos"]))
 
-    print(c(f"▶ IA resolviendo {slug}", "bold") + f"  [{proveedor} · {modelo}]")
+    print(c(f"{'Corregiremos' if fix else 'Resolveremos'} {slug}", "bold") + f"  [{mot(proveedor)}]")
+    if fix:
+        print(f"  respuesta del juez: {len(fb)} caracteres del portapapeles"
+              + (f" · caso agregado a tus tests: {nuevo_caso}" if nuevo_caso else ""))
     print(f"  enunciado: {source}" + (f" · plantillas obligatorias: {', '.join(o['usar'])}" if o["usar"] else ""))
 
     antes = plan_usage() if o["uso"] and proveedor == "claude-code" else None
     tot = {"in": 0, "cache": 0, "out": 0, "usd": 0}
-    detailed = set(o["usar"])  # plantillas cuyo manual completo va en el prompt (modo compacto)
-    msg = build_first_message(slug, statement, source, o["usar"], st["full"])
+    detailed = set(o["usar"])  # plantillas cuya guía completa va en el encargo (modo compacto)
+    def primer_mensaje():
+        if fix:
+            return build_fix_message(slug, statement, source, o["usar"], st["full"], fb, o["nota"], w_code)
+        return build_first_message(slug, statement, source, o["usar"], st["full"])
+
+    msg = primer_mensaje()
     t0 = time.time()
     for attempt in range(1, intentos + 1):
         print(c(f"\n── intento {attempt}/{intentos} ──", "blue"))
@@ -924,10 +1069,10 @@ def solve(argv):
                 if pdf and st["estilo"] not in PDF_NATIVO:
                     statement, source = pdf_text(pdf), f"{pdf.name} (texto extraído)"
                     pdf = None
-                msg = build_first_message(slug, statement, source, o["usar"], st["full"])  # empieza de cero
+                msg = primer_mensaje()  # empieza de cero
                 with log.open("a", encoding="utf-8") as f:
-                    f.write(f"_(cambio a {proveedor} · {modelo})_\n\n")
-                print(c(f"  [{proveedor} · {modelo}]", "gray"))
+                    f.write(f"_(cambio a motor {mot(proveedor)})_\n\n")
+                print(c(f"  [{mot(proveedor)}]", "gray"))
         limit = 6000 if st["full"] else 1500
         usage = getattr(prov, "last_usage", None)
         registrar_uso(slug, proveedor, modelo, attempt, usage)
@@ -936,14 +1081,14 @@ def solve(argv):
         with log.open("a", encoding="utf-8") as f:
             f.write(f"## intento {attempt}\n\n{reply}\n\n")
             if usage:
-                f.write(f"_tokens: entrada {usage['in']} (+{usage['cache']} de caché), salida {usage['out']}_\n\n")
+                f.write(f"_unidades: entrada {usage['in']} (+{usage['cache']} de caché), salida {usage['out']}_\n\n")
         code = extract_java(reply)
         if not code:
             msg = "No encontré un bloque ```java con `class JSolution`. Responde con el archivo completo."
             print(c("✗ la respuesta no trae un bloque ```java con class JSolution", "red"))
             continue
         code = normalize(code, slug)
-        w_ia.write_text(code, encoding="utf-8")
+        w_gen.write_text(code, encoding="utf-8")
         try:
             out, templates = E.render_code(code, slug)
         except SystemExit as e:  # import de una plantilla inexistente
@@ -951,28 +1096,28 @@ def solve(argv):
             print(e)
             continue
         detailed |= set(templates) - {"FastScanner"}
-        if out.startswith("// GENERADO desde"):  # en Main_ia.java no va esa línea
+        if out.startswith("//"):  # en Main_w.java no va esa línea
             out = out.split("\n", 1)[1]
-        f_ia.write_text(out, encoding="utf-8")
+        f_gen.write_text(out, encoding="utf-8")
         missing = [u for u in o["usar"] if u not in templates]
-        ok, report = E.run_tests(slug, ia=True)
+        ok, report = E.run_tests(slug, gen=True)
         if ok and missing:
             ok, report = False, "No usaste las plantillas obligatorias: " + ", ".join(missing)
             print(c("✗ " + report, "red"))
         with log.open("a", encoding="utf-8") as f:
             f.write(f"### resultado del intento {attempt}\n\n```\n{report}\n```\n\n")
         if ok:
-            print(c(f"\n✓ IA resolvió {slug} en {attempt} intento(s), {time.time() - t0:.0f} s", "green"))
-            print(f"  enviar:   {f_ia.relative_to(E.ROOT)}   (plantillas: {', '.join(templates) or 'ninguna'})")
+            print(c(f"\n Pasamos test en {slug} en {attempt} intento(s), {time.time() - t0:.0f} s", "green"))
+            print(f"  enviar:   {f_gen.relative_to(E.ROOT)}   (plantillas: {', '.join(templates) or 'ninguna'})")
             snippet = solve_snippet(code)
-            (ia_dir / "solve.java.txt").write_text(snippet, encoding="utf-8")
-            print(f"  su W:     {w_ia.relative_to(E.ROOT)}\n  solo solve(): {(ia_dir / 'solve.java.txt').relative_to(E.ROOT)}"
+            (wdir / "solve.java.txt").write_text(snippet, encoding="utf-8")
+            print(f"  su W:     {w_gen.relative_to(E.ROOT)}\n  solo solve(): {(wdir / 'solve.java.txt').relative_to(E.ROOT)}"
                   f"\n  bitácora: {log.relative_to(E.ROOT)}")
-            entregar(slug, code, f_ia, ia_dir, snippet, o)
+            entregar(slug, code, f_gen, wdir, snippet, o)
             resumen_uso(tot, antes, o)
             return 0
         msg = feedback_message(report, limit)
-    print(c(f"\n✗ la IA no logró pasar los tests en {intentos} intentos. Revisa {log.relative_to(E.ROOT)}", "red"))
+    print(c(f"\n no logró pasar los tests en {intentos} intentos. Revisa {log.relative_to(E.ROOT)}", "red"))
     return 1
 
 
