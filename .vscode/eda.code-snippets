@@ -1,0 +1,14 @@
+{
+  "EDA work: resuelve tu problema": {
+    "scope": "java",
+    "prefix": ["work", "eda-work"],
+    "body": ["//@work $0"],
+    "description": "Escribe work y Tab: el listener de eda detecta la línea, toma el enunciado del portapapeles y resuelve tu problema. Opcional: escribe después nombres de plantillas para obligar a usarlas, p. ej. //@work PersistentTreap"
+  },
+  "EDA work: respuesta del juez": {
+    "scope": "java",
+    "prefix": ["resp", "respuesta"],
+    "body": ["//Respuesta: error $0"],
+    "description": "Copia el resultado del envío (Ctrl+A, Ctrl+C en el veredicto), escribe resp y Tab: tu solución se corrige con esa respuesta. Opcional: una nota después, p. ej. //Respuesta: error creo que es el caso n=1"
+  }
+}

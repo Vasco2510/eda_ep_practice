@@ -1,0 +1,51 @@
+{
+  // Tareas del asistente EDA. Ctrl+Shift+P → "Tasks: Run Task" (los atajos de teclado están en TUTORIAL.md)
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "EDA: iniciar (Competitive Companion + render en vivo)",
+      "type": "shell",
+      "command": "python tools/eda.py",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "panel": "dedicated", "reveal": "always", "group": "eda" },
+      "runOptions": { "runOn": "folderOpen" }
+    },
+    {
+      "label": "EDA: go (resuelve tu problema y entrégalo)",
+      "type": "shell",
+      "command": "python tools/eda.py go",
+      "problemMatcher": [],
+      "presentation": { "panel": "shared", "reveal": "always", "clear": true, "focus": false }
+    },
+    {
+      "label": "EDA: work (resuelve tu problema → deja lo de solve() en el portapapeles)",
+      "type": "shell",
+      "command": "python tools/eda.py work",
+      "problemMatcher": [],
+      "presentation": { "panel": "shared", "reveal": "always", "clear": true, "focus": false }
+    },
+    {
+      "label": "EDA: test",
+      "type": "shell",
+      "command": "python tools/eda.py test",
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "panel": "shared", "reveal": "always", "clear": true, "focus": false }
+    },
+    {
+      "label": "EDA: test + copiar si pasa",
+      "type": "shell",
+      "command": "python tools/eda.py test --copy",
+      "problemMatcher": [],
+      "presentation": { "panel": "shared", "reveal": "always", "clear": true }
+    },
+    {
+      "label": "EDA: copiar Main.java",
+      "type": "shell",
+      "command": "python tools/eda.py copy",
+      "problemMatcher": [],
+      "presentation": { "panel": "shared", "reveal": "silent" }
+    }
+  ]
+}

@@ -24,7 +24,10 @@ bin/
 /.nb-gradle/
 
 ### VS Code ###
-.vscode/
+.vscode/*
+!.vscode/eda.code-snippets
+!.vscode/settings.json
+!.vscode/tasks.json
 
 ### Mac OS ###
 .DS_Store

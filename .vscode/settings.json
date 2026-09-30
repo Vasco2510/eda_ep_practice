@@ -1,0 +1,13 @@
+{
+  "java.project.sourcePaths": ["src"],
+  "java.project.outputPath": "out",
+  "files.exclude": { "build": true, "out": true },
+  "task.allowAutomaticTasks": "on",
+
+  // Disparador `work` + Tab: el listener necesita ver el archivo guardado
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 800,
+  // Tab expande los snippets (work) sin abrir la lista de sugerencias
+  "editor.tabCompletion": "onlySnippets",
+  "editor.snippetSuggestions": "top"
+}
