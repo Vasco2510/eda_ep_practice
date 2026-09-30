@@ -1,125 +1,124 @@
-# Prueba del flujo en VS Code — Watermelon (Codeforces 4A)
+# Prueba del flujo en VS Code — modo manual y modo `work` (IA)
 
-Objetivo: comprobar el flujo completo de principio a fin con un problema fácil.
-Clic en Competitive Companion → W en VS Code → `eda test` → copiar F → enviar.
+Recorrido para validar todo de principio a fin. Marca cada casilla; si algo no sale como dice
+"Esperado", anótalo y se ajusta. La referencia completa está en [TUTORIAL.md](TUTORIAL.md).
 
-## 0. Qué necesitas instalar
+## 0. Requisitos
 
-| Dónde | Qué | ¿Ya lo tienes? |
+| Dónde | Qué | Estado |
 |---|---|---|
-| Navegador | Extensión **Competitive Companion** (Chrome, Edge o Firefox) | Instálala |
-| VS Code | **Extension Pack for Java** (`vscjava.vscode-java-pack`) | ✅ ya está instalada |
-| PC | Python 3 y JDK (java/javac) | ✅ Python 3.14 y Java 21 |
-
-En VS Code no hace falta nada más. Las tareas que corren `eda` vienen en `.vscode/tasks.json`.
-Nada más necesitas la extensión del navegador.
-
-> Si usas **Opera GX**, primero instala el complemento "Install Chrome Extensions" y luego
-> Competitive Companion desde la Chrome Web Store. Es más simple probar con Chrome o Edge.
+| Navegador | Extensión **Competitive Companion** | Instalada |
+| VS Code | Extension Pack for Java | Instalada |
+| PC | Python 3 y JDK (Java 21) | Instalados |
+| PC | **Claude Code** con sesión iniciada (modo `work`) | `claude auth status --text` → no debe decir `Not logged in` |
+| Opcional | Clave de Groq en `tools/claves.env` (respaldo) | `.\eda work --ping --proveedor groq` |
 
 ## 1. Abrir el proyecto
+- [ ] VS Code → *File → Open Folder…* → `Z:\C26-2\EDA\ExamenEDA\Competitiva` (esa carpeta exacta).
+- [ ] Espera a que Java termine de cargar. Abre la terminal (Ctrl+ñ).
+- [ ] `.\eda selftest` → ✅ `OK: todas las plantillas pasaron (418812 comprobaciones)`.
+- [ ] El listener debe estar corriendo (arranca solo; VS Code puede preguntar "Allow"). Si no:
+      `.\eda` en una terminal que dejas abierta. ✅ `eda escuchando Competitive Companion en el puerto 27121`.
+      Los demás comandos van en **otra** terminal.
 
-1. VS Code → *File → Open Folder…* → elige **`Z:\C26-2\EDA\ExamenEDA\Competitiva`**
-   (esa carpeta exacta, no `ExamenEDA`).
-2. Espera a que la extensión de Java termine de cargar (abajo a la izquierda: "Java: Ready").
-3. Abre la terminal con **Ctrl+ñ** (o *Terminal → New Terminal*).
-4. Verifica las plantillas:
-   ```
-   .\eda selftest
-   ```
-   ✅ Esperado: `OK: todas las plantillas pasaron (418812 comprobaciones)`
+---
 
-## 2. Arrancar el listener
+## Parte A — Modo manual (sin IA) con Watermelon (Codeforces 4A)
 
-VS Code puede preguntar *"This folder has tasks that run automatically… Allow?"*: di **Allow**.
-Si no pregunta nada, arráncalo a mano: **Ctrl+Shift+P → "Tasks: Run Task" → "EDA: iniciar…"**
-(o escribe `.\eda` en una terminal y déjala abierta).
+**A1. Recibir el problema**
+- [ ] Abre https://codeforces.com/problemset/problem/4/A y haz clic en Competitive Companion.
+- [ ] ✅ En el listener: `▶ A. Watermelon  (nuevo)` y `1 tests de muestra`. Existen
+      `src/problemas/cf4A/JSolution.java` y `tests/sample1.in` (`8`) / `sample1.out` (`YES`).
 
-✅ Esperado en esa terminal:
-```
-eda escuchando Competitive Companion en el puerto 27121
-re-render en vivo: src/problemas/*/JSolution.java → entrega/*/Main.java
-```
-Deja esa terminal abierta. Para los demás comandos abre **otra** terminal (el `+` del panel).
-
-## 3. Recibir el problema
-
-1. En el navegador abre https://codeforces.com/problemset/problem/4/A
-2. Clic en el ícono verde (+) de **Competitive Companion**.
-
-✅ Esperado en la terminal del listener:
-```
-▶ A. Watermelon  (nuevo)
-  W: src\problemas\cf4A\JSolution.java
-  F: entrega\cf4A\Main.java
-  1 tests de muestra
-```
-Además deben existir `src/problemas/cf4A/tests/sample1.in` (`8`) y `sample1.out` (`YES`).
-
-❌ Si no aparece nada: revisa que el listener siga corriendo y que no tengas otra extensión
-usando el puerto 27121 (por ejemplo CPH). Mira la sección 7.
-
-## 4. Resolver en W
-
-Abre `src/problemas/cf4A/JSolution.java` (Ctrl+P → `cf4A JSolution`). Escribe la lógica en `solve()`.
-El enunciado: dado `w`, imprime YES si se puede partir en dos partes pares positivas.
-
-<details><summary>Solución (ábrela solo si quieres ir directo a probar el flujo)</summary>
-
+**A2. Resolver**
+- [ ] Abre `src/problemas/cf4A/JSolution.java`, escribe en `solve()` y guarda (Ctrl+S):
 ```java
     static void solve() {
         int w = in.nextInt();
         out.println(w % 2 == 0 && w > 2 ? "YES" : "NO");
     }
 ```
-</details>
+- [ ] ✅ En el listener: `✓ hh:mm:ss entrega\cf4A\Main.java  [FastScanner]` (F se regenera al guardar).
 
-Guarda con **Ctrl+S**. ✅ En la terminal del listener aparece `✓ hh:mm:ss entrega\cf4A\Main.java [FastScanner]`.
+**A3. Probar**
+- [ ] `.\eda test` → ✅ `1/1 tests OK`.
+- [ ] Cambia `"YES"` por `"SI"`, guarda, `.\eda test` → ✅ `✗ WA` con entrada, esperado y obtenido. Devuélvelo a `"YES"`.
+- [ ] Crea `src/problemas/cf4A/tests/mio1.in` con `2` y `mio1.out` con `NO` → `.\eda test` → ✅ `2/2 tests OK`.
 
-## 5. Probar
+**A4. Probar una plantilla (sin enviar)**
+- [ ] En `solve()` escribe `PersistentStack<Integer> ps = new PersistentStack<>();`, pon el cursor sobre
+      `PersistentStack` → **Ctrl+.** → *Import 'PersistentStack'*. Guarda.
+- [ ] ✅ `entrega/cf4A/Main.java` línea 1: `Plantillas incluidas: FastScanner, PersistentStack`.
+- [ ] Borra esa línea y su import, guarda → ✅ la pila desaparece de `Main.java`.
 
-En la segunda terminal:
-```
-.\eda test
-```
-(o **Ctrl+Shift+P → "Tasks: Run Test Task"**)
+**A5. Enviar**
+- [ ] `.\eda test --copy` → ✅ `1/1 tests OK` y `copiado al portapapeles`.
+- [ ] Codeforces → *Submit Code* → problema 4A → **Java 21** → pega → Submit → ✅ **Accepted**.
 
-✅ Esperado:
-```
-✓ OK  sample1 (… ms)
-1/1 tests OK  → entrega\cf4A\Main.java
-```
+---
 
-Para ver cómo se ve un error, cambia `"YES"` por `"SI"`, guarda y corre `.\eda test` otra vez.
-Debe salir `✗ WA` con entrada, esperado y obtenido. Después vuelve a poner `"YES"`.
+## Parte B — Modo `work` (IA)
 
-Agrega un caso tuyo: crea `src/problemas/cf4A/tests/mio1.in` con `2` y `mio1.out` con `NO`.
-Corre `.\eda test` → ✅ `2/2 tests OK`.
+**B1. Ciclo completo sin gastar nada** (respuestas simuladas del problema D: la 1 está mal, la 2 no usa la
+plantilla, la 3 es correcta)
+- [ ] ```
+      .\eda work cf710567D --desde tools\demo\ia_simulada_D --como claude-code --usar PersistentLeftistHeap
+      ```
+- [ ] ✅ intento 1 `✗ WA` → intento 2 `3/3 tests OK` pero `✗ No usaste las plantillas obligatorias` →
+      intento 3 `3/3 tests OK` y `✓ IA resolvió cf710567D en 3 intento(s)`. Al final imprime lo que va en
+      tu W y lo deja en el portapapeles.
+- [ ] Borra `tools\demo\ia_simulada_D\prompt*.md` (lo que se le habría enviado al modelo).
 
-## 6. Enviar
+**B2. IA real, solo pegando (modo `work`)** con un problema público fácil: 71A *Way Too Long Words*
+- [ ] Abre https://codeforces.com/problemset/problem/71/A → clic en Companion → ✅ `▶ A. Way Too Long Words`.
+- [ ] **Ctrl+A, Ctrl+C** en esa misma página.
+- [ ] `.\eda work` → ✅ `enunciado: portapapeles, verificado: contiene «Way Too Long Words»`, la
+      explicación de la IA y `✓ IA resolvió cf71A en 1 intento(s)`.
+- [ ] Abre `src/problemas/cf71A/JSolution.java`: pega el `import` arriba y reemplaza `solve()` con lo del
+      portapapeles (si avisa, descomenta `t = in.nextInt();`). Guarda.
+- [ ] `.\eda test` → ✅ `N/N tests OK`.
+- [ ] `.\eda copy` → pega en Codeforces (Java 21) → ✅ Accepted.
 
-1. `.\eda test --copy` → si todo pasa, `Main.java` queda en el portapapeles.
-2. Abre `entrega/cf4A/Main.java` y míralo: tiene tu `solve()`, la clase `FastScanner` al final y
-   ninguna línea `package` ni `import plantillas…`.
-3. En Codeforces → **Submit Code** → Problem: 4A → Language: **Java 21** → pega → Submit.
-   ✅ Esperado: **Accepted**.
+**B3. IA real, todo automático (`go`)** con otro problema público: 231A *Team* (o el que prefieras)
+- [ ] Companion en https://codeforces.com/problemset/problem/231/A → Ctrl+A, Ctrl+C.
+- [ ] `.\eda go`
+- [ ] ✅ Termina con `✓ LISTO: entrega/cf231A/Main.java está en el portapapeles`. Tu `JSolution.java`
+      ya trae la solución.
+- [ ] Pega en Codeforces → ✅ Accepted.
 
-## 7. Prueba extra: importar una plantilla (sin enviar)
+**B4. Con plantilla obligatoria y el problema del curso (grupo privado)**
+- [ ] Companion en el problema D del grupo → Ctrl+A, Ctrl+C en su página.
+- [ ] `.\eda go --usar PersistentLeftistHeap`
+- [ ] ✅ `Plantillas incluidas: FastScanner, PersistentLeftistHeap` en la línea 1 de `entrega/cf710567D/Main.java`.
+      (Su `JSolution.java` está vacío, así que no hay respaldo. Si antes escribes algo tuyo ahí y repites
+      `go`, tu versión queda en `JSolution.HHMMSS.antes.txt` junto al archivo.)
 
-1. En W, dentro de `solve()`, escribe `PersistentStack<Integer> ps = new PersistentStack<>();`
-2. Pon el cursor sobre `PersistentStack` → **Ctrl+.** → *Import 'PersistentStack' (plantillas)*.
-3. Guarda → abre `entrega/cf4A/Main.java`: la línea 2 dice
-   `Plantillas incluidas: FastScanner, PersistentStack` y la clase está al final.
-4. Borra esa línea y el import, guarda → la pila desaparece de `Main.java`.
+**B5. Verificaciones de seguridad del enunciado**
+- [ ] Con un problema abierto, copia **otra** cosa (por ejemplo un párrafo cualquiera) y corre `.\eda work`
+      → ✅ `el portapapeles no parece el enunciado de este problema: lo ignoro` (no resuelve otro problema).
+- [ ] `.\eda work --clip` con ese mismo portapapeles → ✅ error: `el portapapeles no menciona «…»`.
 
-## Si algo falla
+**B6. Sesión continua**
+- [ ] Después de B2 y B3, mira el consumo que imprime cada ejecución:
+      `tokens: entrada N (+M de caché)`. ✅ En el segundo problema, `M` es mucho mayor que `N` (el manual de
+      plantillas se leyó de caché).
+- [ ] `.\eda work --nueva-sesion` en un problema → ✅ abre una conversación nueva (`M` bajo otra vez).
 
-| Síntoma | Qué hacer |
-|---|---|
-| `.\eda` no se reconoce | Estás en otra carpeta: la terminal debe estar en `…\Competitiva` |
-| "el puerto 27121 está ocupado" | Ya tienes otra instancia de `eda` abierta (cierra la terminal vieja) o la extensión CPH instalada |
-| Competitive Companion no envía nada | Abre un problema **individual** (no la lista del concurso) y recarga la página |
-| VS Code subraya `plantillas` en rojo | Ctrl+Shift+P → "Java: Clean Java Language Server Workspace" → Restart |
-| La tarea automática no arranca | Ctrl+Shift+P → "Tasks: Manage Automatic Tasks" → Allow, o usa `.\eda` en una terminal |
+**B6b. Consumo del plan**
+- [ ] `.\eda uso` → ✅ `hoy: N llamadas · entrada … · salida …` y
+      `Sesión de 5 h: X% usado → te queda ≈ Y%` con la hora de reinicio.
+- [ ] Un problema con `.\eda go --uso` → ✅ al final: `consumo de esta resolución: …` y
+      `tu sesión de 5 h: X% → Z% (esta resolución ≈ N punto(s))`.
+- [ ] En PowerShell: `claude -p "/usage"` → ✅ mismos porcentajes que `.\eda uso`.
 
-Cuando termines, cuéntame qué pasos fallaron o te sobraron, y lo ajusto.
+**B7. Respaldo (opcional)**
+- [ ] `.\eda work --ping --proveedor groq` → ✅ `✓ el proveedor respondió: OK`.
+- [ ] Para simular que Claude falla: `claude auth logout`, luego `.\eda work` → ✅ `↪ claude-code falló: sigo
+      con el respaldo (groq)`. Vuelve a entrar con `claude auth login`.
+
+---
+
+## Qué reportar
+- Pasos que fallaron o te sobraron, y qué decía la terminal.
+- Problemas donde la IA no acertó: lee `entrega/<slug>/ia/log.md` y pásame el enunciado y lo que falló.
+- Comandos que prefieras con otro nombre, o métodos que falten en las plantillas.

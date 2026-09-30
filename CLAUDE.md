@@ -7,13 +7,14 @@ Responde en español.
   sola `public class` en la columna 0 y un comentario de uso arriba.
 - `src/problemas/<slug>/JSolution.java` (W): donde se programa. `tests/*.in|.out`, `problem.json`, `enunciado.*`.
 - `entrega/<slug>/Main.java` (F): se genera desde W con `tools/eda.py` (no se edita a mano). Es lo que se envía.
-- `entrega/<slug>/Main_ia.java`, `entrega/<slug>/ia/`: solución generada por `eda ia`.
+- `entrega/<slug>/Main_ia.java`, `entrega/<slug>/ia/`: solución generada por `eda work`.
 
 ## Comandos (PowerShell, desde esta carpeta)
 - `.\eda test [slug]`: renderiza W → F, compila y corre los tests. Úsalo para verificar cualquier cambio en W.
 - `.\eda list`, `.\eda use <slug>`: problemas; sin slug se usa el problema actual.
 - `.\eda selftest`: verifica todas las plantillas contra fuerza bruta. Córrelo si tocas `src/plantillas`.
-- `.\eda ia --clip --solve`: resolución automática con un LLM (ver TUTORIAL_IA.md).
+- `.\eda work` / `.\eda go`: resolución automática con un LLM (ver TUTORIAL.md). `work` deja lo de solve() en el
+  portapapeles; `go` lo aplica a W, lo prueba y copia Main.java.
 
 ## Al resolver un problema con el usuario
 - Escribe la solución en `src/problemas/<slug>/JSolution.java`, dentro de `solve()`, respetando la plantilla

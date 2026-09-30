@@ -6,17 +6,21 @@ eda — asistente de competitiva para el examen de EDA.
   F (entrega)  : entrega/<slug>/Main.java              ← se genera solo, esto es lo que envías
   Plantillas   : src/plantillas/*.java                 ← se incrustan en F solo si W las importa
 
-Comandos (desde la raíz del proyecto:  .\eda <comando>   o   python tools/eda.py <comando>):
+Comandos (desde la raíz del proyecto, en PowerShell:  .\eda <comando>):
   eda                     listener de Competitive Companion + re-render en vivo (déjalo corriendo)
+  eda work                la IA resuelve el problema actual y deja lo de solve() en el portapapeles (ver TUTORIAL.md)
+  eda go                  TODO en uno: la IA resuelve → aplica a tu W → prueba → copia Main.java para Codeforces
+  eda test   [slug]       genera F, lo compila y lo corre contra los tests de muestra   (atajo: eda t)
+  eda copy   [slug]       copia F al portapapeles para pegar en Codeforces              (atajo: eda c)
   eda render [slug]       genera F una vez
-  eda test   [slug]       genera F, lo compila y lo corre contra los tests de muestra
-  eda copy   [slug]       copia F al portapapeles (para pegar en Codeforces)
   eda new <slug>          crea un problema a mano (si Competitive Companion no está disponible)
   eda use <slug>          cambia el problema actual
   eda list                lista los problemas
+  eda uso                 tokens que gastó eda work + cuánto llevas usado de tu plan de Claude (atajo: eda u)
   eda selftest            verifica las plantillas contra fuerza bruta
-  eda demo                (re)crea el problema de práctica demo_pila (ver TUTORIAL.md)
-  eda ia     [slug]       la IA resuelve el problema → entrega/<slug>/Main_ia.java (ver TUTORIAL_IA.md)
+  eda demo                (re)crea el problema de práctica demo_pila
+  test/copy aceptan --work para usar entrega/<slug>/Main_ia.java (la solución de la IA sin pasar por tu W)
+  Atajos: w = work, t = test, c = copy, l = list, r = render, u = uso
 Sin [slug] se usa el problema actual (el último recibido o el elegido con `eda use`).
 """
 import json
@@ -568,8 +572,12 @@ def cmd_demo():
           f"  W:         {w_path(slug).relative_to(ROOT)}   ← resuélvelo aquí y corre `eda test`")
 
 
+ALIAS = {"w": "work", "t": "test", "c": "copy", "l": "list", "r": "render", "u": "uso"}
+
+
 def main(argv):
     cmd = argv[0] if argv else "start"
+    cmd = ALIAS.get(cmd, cmd)
     arg = argv[1] if len(argv) > 1 else None
     flags = {a for a in argv[1:] if a.startswith("--")}
     if arg and arg.startswith("--"):
@@ -581,13 +589,13 @@ def main(argv):
         render(current_slug(arg))
     elif cmd == "test":
         slug = current_slug(arg)
-        ok, _ = run_tests(slug, ia="--ia" in flags)
+        ok, _ = run_tests(slug, ia="--work" in flags)
         if ok and "--copy" in flags:
-            copy_to_clipboard(f_path(slug, "--ia" in flags))
+            copy_to_clipboard(f_path(slug, "--work" in flags))
         sys.exit(0 if ok else 1)
     elif cmd == "copy":
         slug = current_slug(arg)
-        copy_to_clipboard(f_path(slug, "--ia" in flags) if "--ia" in flags else render(slug, quiet=True))
+        copy_to_clipboard(f_path(slug, True) if "--work" in flags else render(slug, quiet=True))
     elif cmd == "new":
         if not arg or not re.fullmatch(r"[A-Za-z_]\w*", arg):
             raise SystemExit("uso: eda new <slug>   (slug = identificador Java, ej. cf2043A)")
@@ -605,10 +613,16 @@ def main(argv):
         cmd_selftest()
     elif cmd == "demo":
         cmd_demo()
-    elif cmd == "ia":
+    elif cmd in ("work", "go"):
         sys.path.insert(0, str(ROOT / "tools"))
-        import ia
-        sys.exit(ia.solve(argv[1:]))
+        import work
+        sys.exit((work.go if cmd == "go" else work.solve)(argv[1:]))
+    elif cmd == "uso":
+        sys.path.insert(0, str(ROOT / "tools"))
+        import work
+        sys.exit(work.uso(argv[1:]))
+    elif cmd == "ia":
+        raise SystemExit(c("✗ el comando `ia` ahora se llama `work`:  .\\eda work   (todo en uno: .\\eda go)", "red"))
     elif cmd in ("-h", "--help", "help"):
         print(__doc__)
     else:

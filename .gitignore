@@ -31,3 +31,7 @@ bin/
 ### Competitiva (build temporal del runner) ###
 build/
 .eda_current
+tools/claves.env
+.eda_ia_session.json
+.eda_uso.jsonl
+__pycache__/

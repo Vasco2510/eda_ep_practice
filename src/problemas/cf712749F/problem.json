@@ -1,0 +1,31 @@
+{
+  "name": "F. Rollback",
+  "group": "Codeforces - Semana 3 - Persistencia",
+  "url": "https://codeforces.com/group/apQ6meuqNq/contest/712749/problem/F",
+  "interactive": false,
+  "memoryLimit": 256,
+  "timeLimit": 3000,
+  "tests": [
+    {
+      "input": "7 3\n1 2 1 3 1 2 1\n4\n7 3\n7 1\n7 1\n2 2\n",
+      "output": "1\n4\n0\n6\n"
+    }
+  ],
+  "testType": "single",
+  "input": {
+    "type": "stdin"
+  },
+  "output": {
+    "type": "stdout"
+  },
+  "languages": {
+    "java": {
+      "mainClass": "Main",
+      "taskClass": "FRollback"
+    }
+  },
+  "batch": {
+    "id": "9adf134b-31c0-41f3-88a6-dfc6387f2798",
+    "size": 1
+  }
+}
